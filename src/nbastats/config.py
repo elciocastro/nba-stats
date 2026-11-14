@@ -22,6 +22,7 @@ def load_dotenv(path: str | Path = ".env") -> None:
 
 @dataclass(frozen=True)
 class Settings:
+    fonte: str
     api_key: str
     rpm: int
     db_path: str
@@ -31,6 +32,7 @@ class Settings:
 def get_settings() -> Settings:
     load_dotenv()
     return Settings(
+        fonte=os.getenv("NBASTATS_FONTE", "nba_api"),
         api_key=os.getenv("BALLDONTLIE_API_KEY", ""),
         rpm=int(os.getenv("BALLDONTLIE_RPM", "60")),
         db_path=os.getenv("NBASTATS_DB", "data/nba.db"),

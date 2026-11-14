@@ -10,7 +10,7 @@ from . import db
 from .config import get_settings
 from .ingest import sync_range, sync_season
 from .metrics import boxscore, load_rules, player_trends, rank_potenciais
-from .sources import BallDontLie
+from .sources import FONTES, build_source
 
 
 def _table(rows: list[dict], cols: list[str], limit: int = 25) -> None:
@@ -26,6 +26,8 @@ def _table(rows: list[dict], cols: list[str], limit: int = 25) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="nbastats", description=__doc__)
+    parser.add_argument("--fonte", choices=FONTES,
+                        help="fonte de dados (padrão: NBASTATS_FONTE ou nba_api)")
     sub = parser.add_subparsers(dest="cmd", required=True)
 
     sub.add_parser("init-db", help="cria as tabelas")
@@ -59,7 +61,9 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Banco pronto em {settings.db_path}")
 
     elif args.cmd in ("sync-season", "sync-daily"):
-        source = BallDontLie(settings.api_key, rpm=settings.rpm)
+        fonte = args.fonte or settings.fonte
+        print(f"Fonte: {fonte}")
+        source = build_source(fonte, settings)
         if args.cmd == "sync-season":
             result = sync_season(conn, source, args.season)
         else:
