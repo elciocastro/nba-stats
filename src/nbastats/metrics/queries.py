@@ -75,7 +75,10 @@ def player_gamelog(conn: sqlite3.Connection, player_id: int, season: int) -> lis
 def boxscore(
     conn: sqlite3.Connection, team_a: str, team_b: str, date: str | None = None
 ) -> dict[str, Any] | None:
-    """Jogo entre dois times (siglas, ex.: GSW e CHI). Sem data, pega o mais recente."""
+    """Jogo entre dois times (siglas, ex.: GSW e CHI). Sem data, pega o mais recente.
+
+    Só jogos já disputados (com estatística); os do calendário ficam de fora.
+    """
     sql = """
         SELECT g.*, h.abbreviation AS home, v.abbreviation AS visitor
         FROM games g
@@ -84,6 +87,7 @@ def boxscore(
         WHERE ((h.abbreviation = :a AND v.abbreviation = :b)
             OR (h.abbreviation = :b AND v.abbreviation = :a))
           AND (:date IS NULL OR g.date = :date)
+          AND EXISTS (SELECT 1 FROM player_game_stats s WHERE s.game_id = g.id)
         ORDER BY g.date DESC
         LIMIT 1
     """

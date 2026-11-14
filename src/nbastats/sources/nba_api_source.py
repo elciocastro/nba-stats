@@ -4,8 +4,9 @@ Para validar o produto sem pagar. Limitações conhecidas:
 - O stats.nba.com bloqueia IPs de nuvem (AWS, Azure, GCP, GitHub Actions).
   Funciona da sua casa/WSL; não funciona de um servidor.
 - API não oficial: muda sem aviso.
-- Não traz draft, posição nem conferência; o filtro de "anos de liga" do
-  ranking de potencial fica sem efeito com esta fonte.
+- O LeagueGameLog não traz draft nem posição; vêm do PlayerIndex, numa
+  chamada por temporada (método players). Conferência continua vazia.
+- Posição só em G, F e C (com híbridos como 'G-F'); não há PG/SG/SF/PF.
 
 Esta classe converte tudo para o mesmo formato de dicionário da BALLDONTLIE,
 assim a ingestão não sabe de qual fonte os dados vieram.
@@ -60,6 +61,21 @@ def _default_fetcher(pause: float = 0.7, timeout: int = 60) -> Fetcher:
     return fetch
 
 
+def _default_player_index(season: str, timeout: int = 60) -> list[dict[str, Any]]:
+    from nba_api.stats.endpoints import playerindex
+
+    time.sleep(0.7)
+    return playerindex.PlayerIndex(season=season, timeout=timeout).get_normalized_dict()["PlayerIndex"]
+
+
+def _default_scoreboard(day: str, timeout: int = 60) -> list[dict[str, Any]]:
+    from nba_api.stats.endpoints import scoreboardv3
+
+    time.sleep(0.7)
+    body = scoreboardv3.ScoreboardV3(game_date=day, league_id="00", timeout=timeout).get_dict()
+    return body["scoreboard"]["games"]
+
+
 def _default_teams() -> list[dict[str, Any]]:
     from nba_api.stats.static import teams
 
@@ -68,9 +84,13 @@ def _default_teams() -> list[dict[str, Any]]:
 
 class NbaApiSource:
     def __init__(self, fetch: Fetcher | None = None,
-                 teams_fn: Callable[[], list[dict[str, Any]]] | None = None) -> None:
+                 teams_fn: Callable[[], list[dict[str, Any]]] | None = None,
+                 player_index_fn: Callable[[str], list[dict[str, Any]]] | None = None,
+                 scoreboard_fn: Callable[[str], list[dict[str, Any]]] | None = None) -> None:
         self._fetch = fetch or _default_fetcher()
         self._teams_fn = teams_fn or _default_teams
+        self._player_index_fn = player_index_fn or _default_player_index
+        self._scoreboard_fn = scoreboard_fn or _default_scoreboard
 
     # ---------- DataSource ----------
 
@@ -95,6 +115,20 @@ class NbaApiSource:
             for row in rows:
                 yield _stat_from_player_row(row)
 
+    def players(self, *, season=None, start_date=None, end_date=None) -> Iterator[dict[str, Any]]:
+        if season is None:
+            if not start_date:
+                raise ValueError("Informe season ou start_date")
+            season = season_of(start_date)
+        for row in self._player_index_fn(season_label(season)):
+            yield _player_from_index_row(row)
+
+    def schedule(self, *, date: str) -> Iterator[dict[str, Any]]:
+        for row in self._scoreboard_fn(date):
+            game = _game_from_scoreboard(row, date)
+            if game:
+                yield game
+
     # ---------- interno ----------
 
     def _rows(self, kind, season, start_date, end_date):
@@ -117,6 +151,8 @@ def _games_from_team_rows(rows: list[dict[str, Any]], postseason: bool) -> Itera
     """Duas linhas por jogo (uma por time) viram um jogo.
 
     MATCHUP: 'GSW vs. CHI' = GSW em casa; 'GSW @ CHI' = GSW visitante.
+    Em quadra neutra (México, Europa, Copa em Las Vegas) as DUAS linhas vêm
+    com '@'; aí vale a primeira linha e o outro time fica com o lado livre.
     """
     by_game: dict[str, dict[str, Any]] = {}
     for row in rows:
@@ -128,6 +164,8 @@ def _games_from_team_rows(rows: list[dict[str, Any]], postseason: bool) -> Itera
             "status": "Final",
         })
         side = "visitor" if "@" in row["MATCHUP"] else "home"
+        if f"{side}_team" in game:  # quadra neutra: lado já ocupado
+            side = "home" if side == "visitor" else "visitor"
         game[f"{side}_team"] = {"id": row["TEAM_ID"]}
         game[f"{side}_team_score"] = row.get("PTS")
     yield from by_game.values()
@@ -153,4 +191,55 @@ def _stat_from_player_row(row: dict[str, Any]) -> dict[str, Any]:
                    "team_id": row.get("TEAM_ID")},
         "team": {"id": row.get("TEAM_ID")},
         "game": {"id": game_id},
+    }
+
+
+def _int_or_none(value: Any) -> int | None:
+    """'2019' -> 2019; 'Undrafted', '', None -> None."""
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _player_from_index_row(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": int(row["PERSON_ID"]),
+        "first_name": row.get("PLAYER_FIRST_NAME"),
+        "last_name": row.get("PLAYER_LAST_NAME"),
+        "position": row.get("POSITION") or None,
+        "height": row.get("HEIGHT") or None,
+        "weight": str(row["WEIGHT"]) if row.get("WEIGHT") else None,
+        "country": row.get("COUNTRY") or None,
+        "college": row.get("COLLEGE") or None,
+        "draft_year": _int_or_none(row.get("DRAFT_YEAR")),
+        "draft_round": _int_or_none(row.get("DRAFT_ROUND")),
+        "draft_number": _int_or_none(row.get("DRAFT_NUMBER")),
+        "team_id": row.get("TEAM_ID") or None,
+    }
+
+
+# Segundo dígito do gameId: 2 = temporada regular, 4 = playoffs.
+# Pré-temporada (1), All-Star (3), play-in (5) e final da Copa (6) ficam de fora,
+# como no LeagueGameLog.
+_GAME_TYPES = {"2": False, "4": True}
+
+
+def _game_from_scoreboard(row: dict[str, Any], day: str) -> dict[str, Any] | None:
+    game_id = str(row["gameId"])  # '0022600236'
+    if game_id[2] not in _GAME_TYPES:
+        return None
+    final = row.get("gameStatus") == 3
+    home, away = row["homeTeam"], row["awayTeam"]
+    return {
+        "id": int(game_id),
+        "date": day,
+        "season": 2000 + int(game_id[3:5]),
+        "postseason": _GAME_TYPES[game_id[2]],
+        "status": (row.get("gameStatusText") or "").strip() or None,
+        "home_team": {"id": home["teamId"]},
+        "visitor_team": {"id": away["teamId"]},
+        # jogo que não terminou fica sem placar; o sync do LeagueGameLog grava o final
+        "home_team_score": home.get("score") if final else None,
+        "visitor_team_score": away.get("score") if final else None,
     }

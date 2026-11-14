@@ -62,6 +62,16 @@ class FakeSource:
         self.calls.append(("stats", params))
         return list(STATS)
 
+    def players(self, **params):
+        self.calls.append(("players", params))
+        return []
+
+    def schedule(self, *, date):
+        self.calls.append(("schedule", {"date": date}))
+        return [{"id": 103, "date": date, "season": 2026, "status": "7:30 pm ET",
+                 "postseason": False, "home_team": CHI, "visitor_team": GSW,
+                 "home_team_score": None, "visitor_team_score": None}]
+
 
 @pytest.fixture
 def source():

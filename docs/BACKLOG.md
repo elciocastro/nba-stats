@@ -74,10 +74,12 @@ temporadas carregadas. Próximo passo: seção 2.
 
 ## 3. Dados — [P1]
 
-- [ ] **3.1 Draft e posição com nba_api**
+- [x] **3.1 Draft e posição com nba_api**
   O `LeagueGameLog` não traz. Buscar uma vez por jogador
   (`commonplayerinfo` ou `commonallplayers`) e gravar em `players`. Sem isso o
   filtro de anos de liga não funciona com nba_api.
+  *Feito em 2026-11-14:* `PlayerIndex`, uma chamada por carga. Posição só em
+  G/F/C (ver `docs/decisoes/0003-matchup-dvp.md`).
 - [ ] **3.2 Time do jogador por jogo**
   Hoje `players.team_id` é o time mais recente; quem foi trocado aparece no
   time novo em toda a temporada no ranking. Usar `player_game_stats.team_id`
@@ -91,6 +93,31 @@ temporadas carregadas. Próximo passo: seção 2.
   Se o último `sync_log` for erro ou tiver mais de 36 h, avisar
   (e-mail, Telegram ou só um aviso no topo do site).
 - [ ] **3.6 Backup do `data/nba.db`** (cópia diária; o arquivo é pequeno).
+
+## 3b. Matchups (L5/L10 × DvP) — [P0] [?]
+
+Pedido do colega em 2026-11-14. Método e teste retroativo em
+`docs/decisoes/0003-matchup-dvp.md`.
+
+- [x] **3b.1 Cálculo**: L5/L10, uso, DvP temporada e 15 dias, ritmo, saldo,
+  desfalques, nota por critério (`config/matchup.yaml`).
+- [x] **3b.2 Agenda**: jogos de hoje e amanhã na base (`sync-agenda`,
+  também no `sync-daily`).
+- [x] **3b.3 Telas**: "Matchups" e "DvP" no site; `nbastats matchup` e
+  `nbastats backtest` na CLI.
+- [ ] **3b.4 Calibrar com o colega**: o DvP sozinho separa (+0,8 / −0,8 pt);
+  a nota com todos os critérios quase não separa. Decidir pesos, limites e
+  quais critérios ficam. Medir cada ajuste com `nbastats backtest`.
+- [ ] **3b.5 Reformular o visual** em torno do fluxo dele (jogo → jogador →
+  critério), depois do 3b.4.
+- [ ] **3b.6 Lesões confirmadas**: relatório oficial de lesões da NBA (hoje
+  só detectamos quem não jogou a última partida).
+- [ ] **3b.7 Linha de aposta / spread**: exige fonte de odds; hoje o risco de
+  blowout é aproximado pelo saldo médio.
+- [ ] **3b.8 Estilo**: zonas de arremesso e proteção de aro (endpoints de
+  *shot chart* da nba_api). Só se o colega achar que vale.
+- [ ] **3b.9 Posições PG/SG/SF/PF/C**: nenhuma fonte atual traz; avaliar
+  inferir pelo perfil estatístico ou aceitar G/F/C.
 
 ## 4. Métricas e análises — [P1] [?]
 

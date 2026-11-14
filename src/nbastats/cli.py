@@ -8,8 +8,11 @@ from datetime import date, timedelta
 
 from . import db
 from .config import get_settings
-from .ingest import sync_range, sync_season
-from .metrics import boxscore, load_rules, player_trends, rank_potenciais
+from .ingest import sync_range, sync_schedule, sync_season
+from .metrics import (
+    MATCHUP_STATS, backtest, boxscore, load_matchup_rules, load_rules, matchup_report, player_trends,
+    rank_potenciais,
+)
 from .sources import FONTES, build_source
 
 
@@ -22,6 +25,35 @@ def _table(rows: list[dict], cols: list[str], limit: int = 25) -> None:
     print("  ".join(c.ljust(widths[c]) for c in cols))
     for r in rows:
         print("  ".join(str(r.get(c, "")).ljust(widths[c]) for c in cols))
+
+
+def _next_days(n: int) -> list[str]:
+    today = date.today()
+    return [(today + timedelta(days=i)).isoformat() for i in range(n)]
+
+
+def _print_matchup(item: dict, stat: str, limit: int) -> None:
+    g, r, s, d = item["jogo"], item["ritmo"], item["saldo"], item["desfalques"]
+    placar = (f"{g['visitor_team_score']}-{g['home_team_score']}"
+              if g["home_team_score"] is not None else g["status"] or "")
+    print(f"\n=== {g['visitor']} @ {g['home']}  {g['date']}  {placar}")
+    print(f"ritmo {g['visitor']} {r['fora']} / {g['home']} {r['casa']} (liga {r['liga']})  "
+          f"saldo {g['visitor']} {s['fora']:+} / {g['home']} {s['casa']:+}"
+          if r["casa"] is not None and r["fora"] is not None else "sem histórico de ritmo")
+    for side, team in (("fora", g["visitor"]), ("casa", g["home"])):
+        if d[side]:
+            print(f"desfalques {team} no último jogo: {', '.join(d[side])}")
+    rows = [{**p, "nota": f"{p['nota']}/{p['nota_max']}",
+             "dvp": f"{p['dvp']} ({p['dvp_rank']}º)" if p["dvp_rank"] else "-",
+             "dvp_15d": f"{p['dvp_rec']} ({p['dvp_rec_rank']}º)" if p["dvp_rec_rank"] else "-",
+             "min_l5/l10": f"{p['min_l5']}/{p['min_l10']}",
+             "real": "" if p["real"] is None else p["real"],
+             "jogador": p["jogador"] + (" *" if p["fora_ultimo_jogo"] else "")}
+            for p in item["jogadores"]]
+    _table(rows, ["jogador", "time", "grupo", "min_l5/l10", "temporada", "l10", "l5",
+                  "dvp", "dvp_15d", "nota", "classificacao", "real"], limit)
+    if any(p["fora_ultimo_jogo"] for p in item["jogadores"][:limit]):
+        print("* não jogou a última partida do time: confirmar se joga")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -52,6 +84,22 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("season", type=int)
     p.add_argument("--regras", default="config/potencial.yaml")
 
+    p = sub.add_parser("sync-agenda", help="grava os jogos agendados de hoje e amanhã")
+    p.add_argument("--dias", type=int, default=2, help="quantos dias a partir de hoje")
+
+    p = sub.add_parser("matchup", help="cruzamento L5/L10 x DvP dos jogos de um dia")
+    p.add_argument("--data", default=None, help="AAAA-MM-DD (padrão: hoje)")
+    p.add_argument("--stat", default="pts", choices=MATCHUP_STATS)
+    p.add_argument("--regras", default="config/matchup.yaml")
+    p.add_argument("--limite", type=int, default=8, help="jogadores por jogo")
+
+    p = sub.add_parser("backtest", help="testa o cruzamento nos jogos que já aconteceram")
+    p.add_argument("season", type=int)
+    p.add_argument("--stat", default="pts", choices=MATCHUP_STATS)
+    p.add_argument("--regras", default="config/matchup.yaml")
+    p.add_argument("--passo", type=int, default=3, help="usa 1 dia a cada N (mais rápido)")
+    p.add_argument("--desde", help="AAAA-MM-DD; o começo da temporada tem pouca amostra")
+
     args = parser.parse_args(argv)
     settings = get_settings()
     conn = db.connect(settings.db_path)
@@ -70,7 +118,34 @@ def main(argv: list[str] | None = None) -> int:
             today = date.today()
             start = today - timedelta(days=args.days)
             result = sync_range(conn, source, start.isoformat(), today.isoformat())
-        print(f"OK: {result['games']} jogos, {result['stats']} linhas de estatística")
+        print(f"OK: {result['games']} jogos, {result['stats']} linhas de estatística, "
+              f"{result['players']} perfis de jogador")
+        if args.cmd == "sync-daily":
+            agenda = sync_schedule(conn, source, _next_days(2))
+            print(f"Agenda: {agenda['games']} jogos de hoje e amanhã")
+
+    elif args.cmd == "sync-agenda":
+        source = build_source(args.fonte or settings.fonte, settings)
+        result = sync_schedule(conn, source, _next_days(args.dias))
+        print(f"Agenda: {result['games']} jogos")
+
+    elif args.cmd == "matchup":
+        day = args.data or date.today().isoformat()
+        report = matchup_report(conn, day, args.stat, load_matchup_rules(args.regras))
+        if not report:
+            print(f"Nenhum jogo em {day}. Rode `nbastats sync-agenda` para jogos futuros.")
+            return 1
+        for item in report:
+            _print_matchup(item, args.stat, args.limite)
+
+    elif args.cmd == "backtest":
+        res = backtest(conn, args.season, args.stat, load_matchup_rules(args.regras),
+                       step=args.passo, start=args.desde)
+        print(f"{args.stat}: {res['dias']} dias. real - L10 = quanto o jogador fez acima "
+              "da própria média dos últimos 10 jogos.\n")
+        rows = [{"grupo": f"nota {k}", **v} for k, v in res["classificacao"].items()]
+        rows += [{"grupo": f"DvP {k}", **v} for k, v in res["dvp"].items()]
+        _table(rows, ["grupo", "n", "real_menos_l10", "acima_do_l10"])
 
     elif args.cmd == "jogo":
         found = boxscore(conn, args.time_a, args.time_b, args.data)

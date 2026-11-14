@@ -87,6 +87,14 @@ class BallDontLie:
     def stats(self, *, season=None, start_date=None, end_date=None):
         return self._paginate("/stats", self._filters(season, start_date, end_date))
 
+    def players(self, *, season=None, start_date=None, end_date=None):
+        # o perfil completo (posição, draft) já vem dentro de cada linha de /stats
+        return iter(())
+
+    def schedule(self, *, date: str):
+        # /games traz jogos futuros com placar zerado e o horário em status
+        return self._paginate("/games", self._filters(None, date, date))
+
     @staticmethod
     def _filters(season, start_date, end_date) -> dict[str, Any]:
         return {
