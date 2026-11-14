@@ -22,8 +22,16 @@ import yaml
 
 DEFAULT_MATCHUP_RULES = Path("config/matchup.yaml")
 
-# Estatísticas que dá para cruzar com o DvP
-MATCHUP_STATS = ("pts", "reb", "ast", "fg3m", "stl", "blk", "turnover")
+# Mercados que dá para cruzar com o DvP. Os combinados (pra, pr...) e os de
+# 2 pontos são calculados a partir do box score; dd/td valem 1 ou 0 por jogo,
+# então a "média" deles é a frequência (0,4 = 4 em cada 10 jogos).
+MATCHUP_STATS = (
+    "pts", "reb", "ast", "pra", "pr", "pa", "ra",
+    "fg2m", "fg2a", "fg3m", "fg3a", "ftm", "fta",
+    "stl", "blk", "turnover", "dd", "td",
+)
+POSITIONS_5 = ("PG", "SG", "SF", "PF", "C")
+INJURY_STATUSES = ("Out", "Doubtful", "Questionable", "Probable", "Available")
 
 CRITERIOS = (
     "forma", "consistencia", "minutos", "uso",
@@ -49,10 +57,60 @@ def position_group(position: str | None, mapping: dict[str, str]) -> str | None:
     return mapping.get(position.strip())
 
 
+def height_inches(height: str | None) -> int | None:
+    """'6-9' -> 81."""
+    try:
+        feet, inches = str(height).split("-")
+        return int(feet) * 12 + int(inches)
+    except (ValueError, AttributeError):
+        return None
+
+
+def estimate_position(position: str | None, height: str | None, ast36: float | None,
+                      reb36: float | None, cfg: dict[str, Any]) -> str | None:
+    """Estima PG/SG/SF/PF/C a partir da posição oficial (G/F/C), altura e perfil.
+
+    Nenhuma fonte gratuita traz as 5 posições; a regra é simples e fica no YAML:
+    - G: PG se distribui (assistências por 36 min), senão SG
+    - G-F: SF se alto, senão SG · F-G: SF
+    - F: PF se alto ou reboteiro, senão SF · F-C: C se muito alto, senão PF
+    - C e C-F: C
+    """
+    if not position:
+        return None
+    pos = position.strip()
+    h = height_inches(height)
+    if pos == "G":
+        return "PG" if (ast36 or 0) >= cfg.get("pg_min_ast36", 5.5) else "SG"
+    if pos == "G-F":
+        return "SF" if h is not None and h >= cfg.get("sf_min_altura_pol", 79) else "SG"
+    if pos == "F-G":
+        return "SF"
+    if pos == "F":
+        tall = h is not None and h >= cfg.get("pf_min_altura_pol", 81)
+        return "PF" if tall or (reb36 or 0) >= cfg.get("pf_min_reb36", 8.5) else "SF"
+    if pos == "F-C":
+        return "C" if h is not None and h >= cfg.get("c_min_altura_pol", 84) else "PF"
+    if pos in ("C", "C-F"):
+        return "C"
+    return None
+
+
+def _derive(r: dict[str, Any]) -> dict[str, Any]:
+    """Acrescenta os mercados calculados a uma linha de box score."""
+    pts, reb, ast = r.get("pts") or 0, r.get("reb") or 0, r.get("ast") or 0
+    r["pra"], r["pr"], r["pa"], r["ra"] = pts + reb + ast, pts + reb, pts + ast, reb + ast
+    r["fg2m"] = (r.get("fgm") or 0) - (r.get("fg3m") or 0)
+    r["fg2a"] = (r.get("fga") or 0) - (r.get("fg3a") or 0)
+    tens = sum(1 for k in ("pts", "reb", "ast", "stl", "blk") if (r.get(k) or 0) >= 10)
+    r["dd"], r["td"] = int(tens >= 2), int(tens >= 3)
+    return r
+
+
 # ---------- leitura da base ----------
 
-_COLS = ("minutes", "pts", "reb", "ast", "fg3m", "stl", "blk", "turnover",
-         "fgm", "fga", "fta", "oreb")
+_COLS = ("minutes", "pts", "reb", "ast", "fg3m", "fg3a", "stl", "blk", "turnover",
+         "fgm", "fga", "ftm", "fta", "oreb")
 
 
 def _player_rows(conn: sqlite3.Connection, season: int, before: str) -> list[dict[str, Any]]:
@@ -62,7 +120,7 @@ def _player_rows(conn: sqlite3.Connection, season: int, before: str) -> list[dic
         SELECT s.game_id, g.date, s.player_id, s.team_id,
                CASE WHEN s.team_id = g.home_team_id THEN g.visitor_team_id
                     ELSE g.home_team_id END AS opp_id,
-               p.first_name || ' ' || p.last_name AS jogador, p.position,
+               p.first_name || ' ' || p.last_name AS jogador, p.position, p.height,
                {cols}
         FROM player_game_stats s
         JOIN games g ON g.id = s.game_id
@@ -70,7 +128,7 @@ def _player_rows(conn: sqlite3.Connection, season: int, before: str) -> list[dic
         WHERE g.season = ? AND g.date < ? AND s.minutes > 0
         ORDER BY g.date DESC, g.id DESC
     """
-    return [dict(r) for r in conn.execute(sql, (season, before))]
+    return [_derive(dict(r)) for r in conn.execute(sql, (season, before))]
 
 
 def _team_games(rows: list[dict[str, Any]]) -> dict[tuple[int, int], dict[str, Any]]:
@@ -129,6 +187,7 @@ def player_form(rows: list[dict[str, Any]], teams: dict) -> dict[int, dict[str, 
             "player_id": pid,
             "jogador": games[0]["jogador"],
             "position": games[0]["position"],
+            "height": games[0]["height"],
             "team_id": games[0]["team_id"],  # time do jogo mais recente
             "jogos": len(games),
             "usg_l5": _usage(l5, teams), "usg_l10": _usage(l10, teams),
@@ -144,7 +203,7 @@ def player_form(rows: list[dict[str, Any]], teams: dict) -> dict[int, dict[str, 
 
 # ---------- defesa: DvP, ritmo e saldo ----------
 
-def dvp(rows: list[dict[str, Any]], teams: dict, mapping: dict[str, str],
+def dvp(rows: list[dict[str, Any]], teams: dict, group_of: dict[int, str | None],
         since: str | None = None) -> dict[int, dict[str, dict[str, dict[str, float]]]]:
     """Quanto cada defesa cede por jogo a cada grupo de posição.
 
@@ -162,14 +221,14 @@ def dvp(rows: list[dict[str, Any]], teams: dict, mapping: dict[str, str],
         key = (r["game_id"], r["opp_id"])
         if key not in allowed:
             continue
-        group = position_group(r["position"], mapping)
+        group = group_of.get(r["player_id"])
         if group is None:
             continue
         acc = allowed[key].setdefault(group, defaultdict(float))
         for s in MATCHUP_STATS:
             acc[s] += r[s]
 
-    groups = sorted(set(mapping.values()))
+    groups = sorted({g for g in group_of.values() if g})
     per_team: dict[int, list[dict[str, dict[str, float]]]] = defaultdict(list)
     for (_, defense), by_group in allowed.items():
         per_team[defense].append(by_group)
@@ -271,10 +330,56 @@ def _label(nota: int, rules: dict[str, Any]) -> str:
 
 
 def _actual(conn: sqlite3.Connection, game_id: int) -> dict[int, dict[str, Any]]:
+    cols = ", ".join(f"COALESCE({c}, 0) AS {c}" for c in _COLS)
     cur = conn.execute(
-        f"SELECT player_id, minutes, {', '.join(MATCHUP_STATS)} FROM player_game_stats "
-        "WHERE game_id = ? AND minutes > 0", (game_id,))
-    return {r["player_id"]: dict(r) for r in cur}
+        f"SELECT player_id, {cols} FROM player_game_stats WHERE game_id = ? AND minutes > 0",
+        (game_id,))
+    return {r["player_id"]: _derive(dict(r)) for r in cur}
+
+
+def estimated_positions(form: dict[int, dict[str, Any]], rules: dict[str, Any]) -> dict[int, str | None]:
+    """PG/SG/SF/PF/C estimada de cada jogador (perfil da temporada até a data)."""
+    cfg = rules.get("posicao_estimada", {})
+    out = {}
+    for pid, f in form.items():
+        m = f["minutes_temp"] or 0
+        ast36 = f["ast_temp"] * 36 / m if m else None
+        reb36 = f["reb_temp"] * 36 / m if m else None
+        out[pid] = estimate_position(f["position"], f["height"], ast36, reb36, cfg)
+    return out
+
+
+def player_groups(form: dict[int, dict[str, Any]], rules: dict[str, Any]) -> dict[int, str | None]:
+    """Grupo de posição de cada jogador para o DvP.
+
+    posicao_modo 'estimada' usa PG/SG/SF/PF/C (estimate_position); 'oficial'
+    usa o mapa G/F/C do YAML.
+    """
+    if rules.get("posicao_modo", "oficial") == "estimada":
+        return estimated_positions(form, rules)
+    mapping = rules.get("posicoes", {})
+    return {pid: position_group(f["position"], mapping) for pid, f in form.items()}
+
+
+def injury_status(conn: sqlite3.Connection, day: str) -> dict[str, Any]:
+    """Status de cada jogador no injury report mais recente que cobre o dia.
+
+    Devolve {'publicado': 'AAAA-MM-DDTHH:MM' ou None, 'jogadores': {player_id:
+    {'status', 'motivo'}}}. Sem relatório para o dia (datas antigas, por
+    exemplo), a análise usa só quem não jogou a última partida.
+    """
+    row = conn.execute(
+        "SELECT r.id, r.published_at FROM injury_reports r WHERE EXISTS ("
+        " SELECT 1 FROM injuries i WHERE i.report_id = r.id AND i.game_date = ?)"
+        " ORDER BY r.id DESC LIMIT 1", (day,)).fetchone()
+    if row is None:
+        return {"publicado": None, "jogadores": {}}
+    cur = conn.execute(
+        "SELECT player_id, status, reason FROM injuries"
+        " WHERE report_id = ? AND game_date = ? AND player_id IS NOT NULL", (row["id"], day))
+    return {"publicado": row["published_at"],
+            "jogadores": {r["player_id"]: {"status": r["status"], "motivo": r["reason"]}
+                          for r in cur}}
 
 
 def games_on(conn: sqlite3.Connection, day: str) -> list[dict[str, Any]]:
@@ -303,9 +408,12 @@ def matchup_report(conn: sqlite3.Connection, day: str, stat: str,
     if not games:
         return []
 
-    mapping = rules.get("posicoes", {})
     filtros = rules.get("filtros", {})
     crit = rules.get("criterios", {})
+    lesoes = rules.get("lesoes", {})
+    tirar = set(lesoes.get("tirar", ["Out"]))
+    min_desf_lesao = lesoes.get("desfalque_min_minutos", 15)
+    injuries = injury_status(conn, day)
     since = (date.fromisoformat(day) - timedelta(days=rules.get("dvp_recente_dias", 15))).isoformat()
     abbr = {r["id"]: r["abbreviation"] for r in conn.execute("SELECT id, abbreviation FROM teams")}
 
@@ -314,8 +422,10 @@ def matchup_report(conn: sqlite3.Connection, day: str, stat: str,
         rows = _player_rows(conn, season, day)
         teams = _team_games(rows)
         form = player_form(rows, teams)
-        dvp_temp = dvp(rows, teams, mapping)
-        dvp_rec = dvp(rows, teams, mapping, since=since)
+        group_of = player_groups(form, rules)
+        pos_est = estimated_positions(form, rules)
+        dvp_temp = dvp(rows, teams, group_of)
+        dvp_rec = dvp(rows, teams, group_of, since=since)
         ctx = team_context(teams)
 
         for g in (x for x in games if x["season"] == season):
@@ -325,16 +435,28 @@ def matchup_report(conn: sqlite3.Connection, day: str, stat: str,
             desf = {"casa": absences(rows, form, home, min_desf),
                     "fora": absences(rows, form, away, min_desf)}
             fora_ultimo = set(desf["casa"]) | set(desf["fora"])
+            if injuries["publicado"]:
+                # com relatório oficial, os desfalques vêm dele
+                desf = {side: sorted(
+                    f"{form[pid]['jogador']} ({inj['status']})"
+                    for pid, inj in injuries["jogadores"].items()
+                    if pid in form and form[pid]["team_id"] == team
+                    and inj["status"] in ("Out", "Doubtful", "Questionable")
+                    and (form[pid]["minutes_l10"] or 0) >= min_desf_lesao)
+                    for side, team in (("casa", home), ("fora", away))}
             players = []
             for p in form.values():
                 if p["team_id"] not in (home, away):
                     continue
+                inj = injuries["jogadores"].get(p["player_id"])
+                if inj and inj["status"] in tirar and actual.get(p["player_id"]) is None:
+                    continue  # fora pelo relatório (se jogou mesmo assim, aparece)
                 if p["jogos"] < filtros.get("min_jogos", 5):
                     continue
                 if (p["minutes_l10"] or 0) < filtros.get("min_minutos_l10", 20):
                     continue
                 opp = away if p["team_id"] == home else home
-                group = position_group(p["position"], mapping)
+                group = group_of.get(p["player_id"])
                 d = dvp_temp.get(opp, {}).get(group, {}).get(stat) if group else None
                 d_rec = dvp_rec.get(opp, {}).get(group, {}).get(stat) if group else None
                 checks = _checks(p, stat, d, d_rec, ctx, home, away, crit)
@@ -347,6 +469,7 @@ def matchup_report(conn: sqlite3.Connection, day: str, stat: str,
                     "adversario": abbr.get(opp),
                     "posicao": p["position"],
                     "grupo": group,
+                    "posicao_est": pos_est.get(p["player_id"]),
                     "jogos": p["jogos"],
                     "min_l5": p["minutes_l5"], "min_l10": p["minutes_l10"],
                     "usg_l5": p["usg_l5"], "usg_l10": p["usg_l10"],
@@ -360,6 +483,8 @@ def matchup_report(conn: sqlite3.Connection, day: str, stat: str,
                     "classificacao": _label(nota, rules),
                     # não jogou a última partida do time: confirmar se joga hoje
                     "fora_ultimo_jogo": p["jogador"] in fora_ultimo,
+                    "lesao": inj["status"] if inj else None,
+                    "lesao_motivo": inj["motivo"] if inj else None,
                     "real": real[stat] if real else None,
                     "min_real": real["minutes"] if real else None,
                 })
@@ -370,6 +495,7 @@ def matchup_report(conn: sqlite3.Connection, day: str, stat: str,
                           "liga": ctx["ritmo_liga"]},
                 "saldo": {"casa": ctx["saldo"].get(home), "fora": ctx["saldo"].get(away)},
                 "desfalques": desf,
+                "injury_report": injuries["publicado"],
                 "jogadores": players,
             })
     return report
@@ -424,13 +550,13 @@ def backtest(conn: sqlite3.Connection, season: int, stat: str, rules: dict[str, 
 def dvp_table(conn: sqlite3.Connection, season: int, day: str, stat: str,
               rules: dict[str, Any], recent: bool = False) -> list[dict[str, Any]]:
     """Ranking das 30 defesas por grupo de posição (para a tela de DvP)."""
-    mapping = rules.get("posicoes", {})
     rows = _player_rows(conn, season, day)
     teams = _team_games(rows)
+    group_of = player_groups(player_form(rows, teams), rules)
     since = None
     if recent:
         since = (date.fromisoformat(day) - timedelta(days=rules.get("dvp_recente_dias", 15))).isoformat()
-    table = dvp(rows, teams, mapping, since=since)
+    table = dvp(rows, teams, group_of, since=since)
     abbr = {r["id"]: r["abbreviation"] for r in conn.execute("SELECT id, abbreviation FROM teams")}
     out = []
     for team_id, groups in table.items():

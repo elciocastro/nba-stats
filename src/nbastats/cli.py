@@ -8,12 +8,12 @@ from datetime import date, timedelta
 
 from . import db
 from .config import get_settings
-from .ingest import sync_range, sync_schedule, sync_season
+from .ingest import refresh, sync_injuries, sync_range, sync_schedule, sync_season
 from .metrics import (
     MATCHUP_STATS, backtest, boxscore, load_matchup_rules, load_rules, matchup_report, player_trends,
     rank_potenciais,
 )
-from .sources import FONTES, build_source
+from .sources import FONTES, build_injury_source, build_source
 
 
 def _table(rows: list[dict], cols: list[str], limit: int = 25) -> None:
@@ -40,17 +40,21 @@ def _print_matchup(item: dict, stat: str, limit: int) -> None:
     print(f"ritmo {g['visitor']} {r['fora']} / {g['home']} {r['casa']} (liga {r['liga']})  "
           f"saldo {g['visitor']} {s['fora']:+} / {g['home']} {s['casa']:+}"
           if r["casa"] is not None and r["fora"] is not None else "sem histórico de ritmo")
+    origem = (f"injury report {item['injury_report']}" if item["injury_report"]
+              else "não jogaram a última partida")
     for side, team in (("fora", g["visitor"]), ("casa", g["home"])):
         if d[side]:
-            print(f"desfalques {team} no último jogo: {', '.join(d[side])}")
+            print(f"desfalques {team} ({origem}): {', '.join(d[side])}")
     rows = [{**p, "nota": f"{p['nota']}/{p['nota_max']}",
              "dvp": f"{p['dvp']} ({p['dvp_rank']}º)" if p["dvp_rank"] else "-",
              "dvp_15d": f"{p['dvp_rec']} ({p['dvp_rec_rank']}º)" if p["dvp_rec_rank"] else "-",
              "min_l5/l10": f"{p['min_l5']}/{p['min_l10']}",
              "real": "" if p["real"] is None else p["real"],
-             "jogador": p["jogador"] + (" *" if p["fora_ultimo_jogo"] else "")}
+             "jogador": p["jogador"] + (f" [{p['lesao']}]" if p["lesao"] else "")
+                        + (" *" if p["fora_ultimo_jogo"] and not p["lesao"] else ""),
+             "pos": f"{p['grupo'] or '?'}/{p['posicao_est'] or '?'}"}
             for p in item["jogadores"]]
-    _table(rows, ["jogador", "time", "grupo", "min_l5/l10", "temporada", "l10", "l5",
+    _table(rows, ["jogador", "time", "pos", "min_l5/l10", "temporada", "l10", "l5",
                   "dvp", "dvp_15d", "nota", "classificacao", "real"], limit)
     if any(p["fora_ultimo_jogo"] for p in item["jogadores"][:limit]):
         print("* não jogou a última partida do time: confirmar se joga")
@@ -86,6 +90,14 @@ def main(argv: list[str] | None = None) -> int:
 
     p = sub.add_parser("sync-agenda", help="grava os jogos agendados de hoje e amanhã")
     p.add_argument("--dias", type=int, default=2, help="quantos dias a partir de hoje")
+
+    p = sub.add_parser("lesoes", help="grava o injury report oficial mais recente")
+
+    p = sub.add_parser("atualizar",
+                       help="estatísticas recentes + agenda + injury report (para rodar a cada 15 min)")
+    p.add_argument("--intervalo", type=float, default=15,
+                   help="não refaz se a última atualização tiver menos de N minutos")
+    p.add_argument("--forcar", action="store_true", help="atualiza mesmo se for recente")
 
     p = sub.add_parser("matchup", help="cruzamento L5/L10 x DvP dos jogos de um dia")
     p.add_argument("--data", default=None, help="AAAA-MM-DD (padrão: hoje)")
@@ -128,6 +140,22 @@ def main(argv: list[str] | None = None) -> int:
         source = build_source(args.fonte or settings.fonte, settings)
         result = sync_schedule(conn, source, _next_days(args.dias))
         print(f"Agenda: {result['games']} jogos")
+
+    elif args.cmd == "lesoes":
+        result = sync_injuries(conn, build_injury_source())
+        print(f"Injury report {result.get('report')}: {result['injuries']} jogadores, "
+              f"{result['unmatched']} sem correspondência na base")
+
+    elif args.cmd == "atualizar":
+        source = build_source(args.fonte or settings.fonte, settings)
+        result = refresh(conn, source, build_injury_source(),
+                         min_interval_min=args.intervalo, force=args.forcar)
+        if result["pulado"]:
+            print(f"Já atualizado há {result['minutos']} min ({result['ultima']} UTC). "
+                  "Use --forcar para refazer.")
+        else:
+            print(f"OK: {result['games']} jogos, {result['stats']} linhas, "
+                  f"injury report {result['relatorio']} ({result['lesoes']} jogadores)")
 
     elif args.cmd == "matchup":
         day = args.data or date.today().isoformat()

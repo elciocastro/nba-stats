@@ -6,16 +6,18 @@ As telas só chamam nbastats.metrics; nenhuma regra de negócio mora aqui.
 from __future__ import annotations
 
 import hmac
-from datetime import date
+from datetime import date, datetime, timezone
 
 import streamlit as st
 
 from nbastats import db
 from nbastats.config import get_settings
+from nbastats.ingest import last_refresh, refresh
 from nbastats.metrics import (
     MATCHUP_STATS, boxscore, dvp_table, load_matchup_rules, load_rules, matchup_report,
     player_gamelog, player_trends, rank_potenciais, seasons,
 )
+from nbastats.sources import build_injury_source, build_source
 
 st.set_page_config(page_title="NBA Stats", layout="wide")
 settings = get_settings()
@@ -47,13 +49,41 @@ if not available:
     st.info("Base vazia. Rode `nbastats sync-season <ano>` para carregar uma temporada.")
     st.stop()
 
+def _refresh_box():
+    last = last_refresh(conn)
+    if last:
+        age = (datetime.now(timezone.utc) - datetime.fromisoformat(last)).total_seconds() / 60
+        st.sidebar.caption(f"Última atualização: há {age:.0f} min")
+    else:
+        st.sidebar.caption("Nenhuma atualização completa ainda.")
+    if st.sidebar.button("Atualizar agora", help="Estatísticas recentes, agenda e injury report"):
+        with st.spinner("Buscando dados..."):
+            try:
+                res = refresh(conn, build_source(settings.fonte, settings), build_injury_source())
+            except Exception as exc:  # erro fica no sync_log; aqui só avisa
+                st.sidebar.error(f"Falhou: {exc}")
+                return
+        if res["pulado"]:
+            st.sidebar.info(f"Já atualizado há {res['minutos']} min; nada novo a buscar.")
+        else:
+            st.sidebar.success(f"Atualizado. Injury report de {res['relatorio'] or '—'} (ET).")
+
+
+_refresh_box()
 page = st.sidebar.radio("Página", ["Matchups", "DvP", "Ranking", "Jogador", "Potenciais", "Jogo"])
 season = st.sidebar.selectbox(
     "Temporada", available, format_func=lambda s: f"{s}-{str(s + 1)[-2:]}"
 )
 
-STAT_NAMES = {"pts": "Pontos", "reb": "Rebotes", "ast": "Assistências", "fg3m": "Bolas de 3",
-              "stl": "Roubos", "blk": "Tocos", "turnover": "Erros"}
+STAT_NAMES = {
+    "pts": "Pontos", "reb": "Rebotes", "ast": "Assistências",
+    "pra": "PRA (pts+reb+ast)", "pr": "PR (pts+reb)", "pa": "PA (pts+ast)", "ra": "RA (reb+ast)",
+    "fg2m": "2FM (bolas de 2 certas)", "fg2a": "2FA (bolas de 2 tentadas)",
+    "fg3m": "3FM (bolas de 3 certas)", "fg3a": "3FA (bolas de 3 tentadas)",
+    "ftm": "FTM (lances livres certos)", "fta": "FTA (lances livres tentados)",
+    "stl": "Roubos", "blk": "Tocos", "turnover": "Turnovers",
+    "dd": "Duplo-duplo (frequência)", "td": "Triplo-duplo (frequência)",
+}
 CRIT_NAMES = {"forma": "Forma", "consistencia": "Consist.", "minutos": "Minutos", "uso": "Uso",
               "dvp_temporada": "DvP temp.", "dvp_recente": "DvP rec.", "ritmo": "Ritmo",
               "blowout": "Sem blowout"}
@@ -67,8 +97,9 @@ def _matchup_rows(players):
     rows = []
     for p in players:
         row = {
-            "Jogador": p["jogador"] + (" ⚠" if p["fora_ultimo_jogo"] else ""),
-            "Time": p["time"], "Pos": p["grupo"] or "?",
+            "Jogador": p["jogador"] + (" ⚠" if p["fora_ultimo_jogo"] and not p["lesao"] else ""),
+            "Lesão": p["lesao"] or "",
+            "Time": p["time"], "Pos DvP": p["grupo"] or "?", "Pos est.": p["posicao_est"] or "?",
             "Min L5/L10": f"{p['min_l5']:.0f} / {p['min_l10']:.0f}",
             "Temp.": p["temporada"], "L10": p["l10"], "L5": p["l5"],
             "DvP": p["dvp"], "DvP rank": p["dvp_rank"], "DvP 15d rank": p["dvp_rec_rank"],
@@ -101,9 +132,13 @@ if page == "Matchups":
   só com jogos **antes** desta data.
 - **DvP**: quanto o adversário cede por jogo à posição do jogador. **Rank 30 = cede mais**
   (alvo favorável); 1 = melhor defesa. **15d** = só os últimos {rules.get('dvp_recente_dias', 15)} dias.
-- **Pos**: a nba_api só tem G, F e C (sem PG/SG/SF/PF). Híbridos seguem `config/matchup.yaml`.
+- **Pos DvP**: grupo usado no DvP (G/F/C, oficial). **Pos est.**: PG/SG/SF/PF/C **estimada** pela
+  altura e pelo perfil (nenhuma fonte grátis traz as 5). No teste retroativo, o DvP com 5 posições
+  não separou melhor que com 3; dá para trocar em `config/matchup.yaml` (`posicao_modo`).
+- **Lesão**: status no injury report oficial mais recente. Out some da lista; Doubtful,
+  Questionable e Probable ficam marcados.
 - **Nota**: quantos critérios passaram (✓). Limites em `config/matchup.yaml`.
-- **⚠**: não jogou a última partida do time; confirmar se joga. Lesões não vêm da fonte.
+- **⚠**: não jogou a última partida do time e não está no injury report (confirmar se joga).
 - **Real**: aparece em datas passadas, para conferir o método.
 - **Teste retroativo (2025-26, pontos)**: contra defesas entre as 5 piores na posição, o jogador
   fez +0,8 ponto acima do próprio L10; contra as 5 melhores, −0,8. A nota com todos os critérios
@@ -129,8 +164,10 @@ if page == "Matchups":
                 m1.metric("Ritmo do jogo", f"{(r['casa'] + r['fora']) / 2:.1f}",
                           f"{(r['casa'] + r['fora']) / 2 - r['liga']:+.1f} vs liga")
                 m2.metric("Saldo médio", f"{g['visitor']} {sd['fora']:+.1f} · {g['home']} {sd['casa']:+.1f}")
-            m3.markdown(f"**Fora no último jogo ({g['visitor']})**  \n{', '.join(d['fora']) or '—'}")
-            m4.markdown(f"**Fora no último jogo ({g['home']})**  \n{', '.join(d['casa']) or '—'}")
+            label = (f"Injury report {item['injury_report'][11:]} ET" if item["injury_report"]
+                     else "Fora no último jogo")
+            m3.markdown(f"**{label} · {g['visitor']}**  \n{', '.join(d['fora']) or '—'}")
+            m4.markdown(f"**{label} · {g['home']}**  \n{', '.join(d['casa']) or '—'}")
             if not players:
                 st.caption("Sem jogadores com histórico suficiente.")
                 continue

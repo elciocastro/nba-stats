@@ -66,3 +66,26 @@ CREATE TABLE IF NOT EXISTS sync_log (
     status       TEXT NOT NULL DEFAULT 'running',
     error        TEXT
 );
+
+-- Injury report oficial (um PDF a cada 15 min). id = AAAAMMDDHHMM (horário ET).
+CREATE TABLE IF NOT EXISTS injury_reports (
+    id            INTEGER PRIMARY KEY,
+    published_at  TEXT NOT NULL,      -- AAAA-MM-DDTHH:MM (ET)
+    url           TEXT,
+    fetched_at    TEXT
+);
+
+-- Uma linha por jogador em cada relatório. id = report_id * 1000 + posição.
+CREATE TABLE IF NOT EXISTS injuries (
+    id           INTEGER PRIMARY KEY,
+    report_id    INTEGER NOT NULL,
+    game_date    TEXT,
+    matchup      TEXT,
+    team_id      INTEGER,
+    player_id    INTEGER,             -- NULL se o nome não bateu com a base
+    player_name  TEXT,
+    status       TEXT,                -- Out, Doubtful, Questionable, Probable, Available
+    reason       TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_injuries_report ON injuries (report_id);
+CREATE INDEX IF NOT EXISTS idx_injuries_date ON injuries (game_date);
