@@ -120,6 +120,7 @@ def _player_rows(conn: sqlite3.Connection, season: int, before: str) -> list[dic
         SELECT s.game_id, g.date, s.player_id, s.team_id,
                CASE WHEN s.team_id = g.home_team_id THEN g.visitor_team_id
                     ELSE g.home_team_id END AS opp_id,
+               CASE WHEN s.team_id = g.home_team_id THEN 1 ELSE 0 END AS em_casa,
                p.first_name || ' ' || p.last_name AS jogador, p.position, p.height,
                {cols}
         FROM player_game_stats s
@@ -192,6 +193,12 @@ def player_form(rows: list[dict[str, Any]], teams: dict) -> dict[int, dict[str, 
             "jogos": len(games),
             "usg_l5": _usage(l5, teams), "usg_l10": _usage(l10, teams),
             "usg_temp": _usage(games, teams),
+            # jogos da temporada (mais recente primeiro), para barras e taxa de acerto
+            "historico": [
+                {"data": g["date"], "opp_id": g["opp_id"], "em_casa": bool(g["em_casa"]),
+                 "minutes": g["minutes"], **{s: g[s] for s in MATCHUP_STATS}}
+                for g in games
+            ],
         }
         for col in ("minutes", *MATCHUP_STATS):
             info[f"{col}_l5"] = _avg(l5, col)
@@ -530,6 +537,9 @@ def matchup_report(conn: sqlite3.Connection, day: str, stat: str,
                     }
                 players.append({
                     **extra,
+                    "historico": p["historico"],
+                    "adversario_id": opp,
+                    "time_id": p["team_id"],
                     "player_id": p["player_id"],
                     "jogador": p["jogador"],
                     "time": abbr.get(p["team_id"]),

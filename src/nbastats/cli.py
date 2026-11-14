@@ -119,6 +119,14 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--limite", type=int, default=8, help="jogadores por jogo")
     p.add_argument("--params", default="config/projecao.yaml")
 
+    p = sub.add_parser("linha", help="grava a linha da casa: linha \"Jamal Murray\" pts 24.5 --over 1.9")
+    p.add_argument("jogador", help="nome ou parte do nome")
+    p.add_argument("mercado", choices=MATCHUP_STATS)
+    p.add_argument("linha", type=float, nargs="?", help="sem valor: apaga a linha")
+    p.add_argument("--over", type=float, help="odd decimal do over")
+    p.add_argument("--under", type=float, help="odd decimal do under")
+    p.add_argument("--data", default=None, help="AAAA-MM-DD (padrão: hoje)")
+
     p = sub.add_parser("calibrar", help="recalcula os parâmetros da projeção com os jogos já disputados")
     p.add_argument("season", type=int)
     p.add_argument("--desde", help="AAAA-MM-DD; o começo da temporada tem pouca amostra")
@@ -190,6 +198,18 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         for item in report:
             _print_matchup(item, args.stat, args.limite)
+
+    elif args.cmd == "linha":
+        from .metrics.linhas import find_player, save_line
+        found = find_player(conn, args.jogador)
+        if len(found) != 1:
+            names = ", ".join(f"{f['first_name']} {f['last_name']}" for f in found[:8])
+            print(f"{len(found)} jogadores com esse nome{': ' + names if names else ''}. Seja mais específico.")
+            return 1
+        pl, day = found[0], args.data or date.today().isoformat()
+        save_line(conn, day, pl["id"], args.mercado, args.linha, args.over, args.under)
+        acao = f"{args.linha:g}" if args.linha is not None else "apagada"
+        print(f"{pl['first_name']} {pl['last_name']} · {args.mercado} · {day}: linha {acao}")
 
     elif args.cmd == "calibrar":
         rules, params = load_matchup_rules(args.regras), load_projection_params(args.params)

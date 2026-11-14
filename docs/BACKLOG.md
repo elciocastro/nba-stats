@@ -6,16 +6,20 @@ Legenda: **[P0]** bloqueia o resto · **[P1]** necessário para o MVP ·
 
 ## Estado atual
 
-Pronto e testado com dados simulados (26 testes):
+Atualizado em 2026-11-14 (95 testes). Detalhes do que o site faz no README.
 
-- Duas fontes atrás da interface `DataSource`: `nba_api` (padrão, grátis) e BALLDONTLIE (paga)
-- Ingestão idempotente em SQLite, com registro de cada execução em `sync_log`
-- CLI: `sync-season`, `sync-daily`, `jogo`, `ranking`, `potencial`
-- Site Streamlit: ranking, ficha do jogador, potenciais, box score; senha opcional
-- Ranking de potencial configurável em `config/potencial.yaml`
+- **Dados**: nba_api validada contra o nba.com (seção 1); duas temporadas na
+  base; agenda, injury report oficial (a cada 15 min) e zonas de arremesso.
+- **Análise**: 18 mercados, DvP, posição estimada, projeção calibrada (2% a
+  4% melhor que o L10), margem e risco de blowout, com/sem companheiro,
+  chance de over/under calibrada contra a linha.
+- **Site**: página Props dinâmica (tema escuro, abas, barras contra a linha,
+  detalhe com linha e odds), Linhas, Matchups (tabela), DvP e as antigas.
+- **Feito por PR**: #1 fonte nba_api · #2 matchups e DvP · #3 fase 1 (dados)
+  · #4 fase 2 (projeção) · fase 3 (linhas e visual) no PR seguinte.
 
-**Seção 1 concluída em 2026-11-14**: nba_api validada contra o nba.com, duas
-temporadas carregadas. Próximo passo: seção 2.
+**Próximo**: fase 3b (API de odds, depende das casas), fase 4 (registro de
+apostas) e fase 5 (Protocolo BetânIAG, depende do texto do protocolo).
 
 ---
 
@@ -124,10 +128,16 @@ ritmo, saldo, desfalques, nota por critério, agenda, telas Matchups e DvP,
 - [ ] 2f. Recalibrar com a temporada 2026-27 a partir de dezembro.
 - [ ] 2g. Guardar a fotografia das zonas por dia, para validar o encaixe.
 
-**Fase 3 — linhas de aposta**
-- [ ] 3a. Linha digitada no site; taxa de acerto (L5, L10, temporada, casa e
-  fora, contra o adversário) e diferença para a projeção.
-- [ ] 3b. API de odds. **Pendente: quais casas** (o colega informa).
+**Fase 3 — linhas de aposta e visual** (ver `docs/decisoes/0006-linhas-e-visual.md`)
+- [x] 3a. Linha e odds digitadas (detalhe do jogador, página Linhas ou
+  `nbastats linha`); taxa de acerto (L5, L10, L20, temporada, casa, fora,
+  contra o adversário); diferença para a projeção.
+- [x] 3c. Chance de over/under calibrada por mercado (binomial negativa ou
+  normal), odd justa e valor esperado.
+- [x] 3d. Página Props dinâmica: tema escuro, abas de mercado, chips dos
+  jogos, janela L5/L10/L20/temporada, foto, barras contra a linha, detalhe.
+- [ ] 3b. API de odds gravando na tabela `lines`. **Pendente: quais casas**
+  (o colega informa).
 
 **Fase 4 — registro de apostas**
 - [ ] 4a. Guardar aposta (jogador, mercado, linha, over/under, odd) e
@@ -139,8 +149,10 @@ ritmo, saldo, desfalques, nota por critério, agenda, telas Matchups e DvP,
   protocolo** (o usuário envia quando chegarmos aqui).
 
 **Fase 6 — visual**
-- [ ] 6a. Redesenhar as telas em torno do fluxo de análise, depois das
-  fases 2 a 5.
+- [x] 6a. Primeira versão dinâmica (página Props, fase 3d).
+- [ ] 6b. Ajustes com o uso do colega (celular principalmente).
+- [ ] 6c. Avaliar outro front (ex.: React) se o Streamlit limitar, junto com
+  a ida para o servidor (seção 6).
 
 ## 4. Métricas e análises — [P1] [?]
 
@@ -157,11 +169,11 @@ Dependem do item 2.3. Candidatas:
 
 ## 5. Site — [P1]
 
-- [ ] **5.1 Busca de jogo por time e data** com lista dos jogos do dia, em
-  vez de digitar as siglas.
+- [x] **5.1 Busca de jogo por time e data**: chips dos jogos do dia na
+  página Props (o box score ainda usa siglas).
 - [ ] **5.2 Nomes de colunas legíveis** (hoje aparecem `pts_n`, `minutes`).
 - [ ] **5.3 Exportar tabela em CSV**.
-- [ ] **5.4 Mostrar a data da última atualização** (do `sync_log`).
+- [x] **5.4 Mostrar a data da última atualização** (do `sync_log`).
 - [ ] **5.5 Editar os critérios de potencial pelo site** (hoje é o YAML).
   Só depois que os critérios estabilizarem.
 

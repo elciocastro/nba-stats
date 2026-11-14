@@ -18,9 +18,11 @@ from nbastats.metrics import (
     matchup_report,
     player_gamelog, player_trends, rank_potenciais, seasons,
 )
+from nbastats.metrics.linhas import lines_for, save_line
 from nbastats.sources import build_injury_source, build_source
+from nbastats.web import props
 
-st.set_page_config(page_title="NBA Stats", layout="wide")
+st.set_page_config(page_title="NBA Stats", page_icon="🏀", layout="wide")
 settings = get_settings()
 
 
@@ -71,7 +73,8 @@ def _refresh_box():
 
 
 _refresh_box()
-page = st.sidebar.radio("Página", ["Matchups", "DvP", "Ranking", "Jogador", "Potenciais", "Jogo"])
+page = st.sidebar.radio("Página", ["Props", "Linhas", "Matchups (tabela)", "DvP", "Ranking",
+                                   "Jogador", "Potenciais", "Jogo"])
 season = st.sidebar.selectbox(
     "Temporada", available, format_func=lambda s: f"{s}-{str(s + 1)[-2:]}"
 )
@@ -139,7 +142,48 @@ def _explain(p, stat):
     return "\n".join(parts)
 
 
-if page == "Matchups":
+if page == "Props":
+    props.render(conn, last_refresh(conn))
+    st.stop()
+
+if page == "Linhas":
+    st.title("Linhas da casa")
+    st.caption("Digite a linha e as odds (decimais) de cada jogador. Linha vazia apaga. "
+               "A página Props usa estas linhas no lugar da referência.")
+    c1, c2 = st.columns(2)
+    day = c1.date_input("Data", date.today(), format="DD/MM/YYYY")
+    stat = c2.selectbox("Mercado", list(props.MARKETS), format_func=props.MARKETS.get)
+    report = props._report(conn, day.isoformat(), stat, last_refresh(conn))
+    saved = lines_for(conn, day.isoformat(), stat)
+    rows = [{"id": p["player_id"], "Jogador": p["jogador"], "Jogo": f"{g['jogo']['visitor']} @ {g['jogo']['home']}",
+             "L10": p["l10"], "Projeção": p.get("proj"),
+             "Linha": (saved.get(p["player_id"]) or {}).get("line"),
+             "Odd over": (saved.get(p["player_id"]) or {}).get("odd_over"),
+             "Odd under": (saved.get(p["player_id"]) or {}).get("odd_under")}
+            for g in report for p in g["jogadores"]]
+    if not rows:
+        st.info("Nenhum jogo nesta data.")
+        st.stop()
+    edited = st.data_editor(
+        rows, hide_index=True, width="stretch", key=f"ed_{day}_{stat}",
+        disabled=["Jogador", "Jogo", "L10", "Projeção"], column_order=[
+            "Jogador", "Jogo", "L10", "Projeção", "Linha", "Odd over", "Odd under"],
+        column_config={"Linha": st.column_config.NumberColumn(step=0.5, format="%.1f"),
+                       "Odd over": st.column_config.NumberColumn(step=0.01, format="%.2f"),
+                       "Odd under": st.column_config.NumberColumn(step=0.01, format="%.2f"),
+                       "Projeção": st.column_config.NumberColumn(format="%.1f")})
+    if st.button("Salvar linhas", type="primary"):
+        n = 0
+        for old, new in zip(rows, edited):
+            if (old["Linha"], old["Odd over"], old["Odd under"]) != (new["Linha"], new["Odd over"], new["Odd under"]):
+                save_line(conn, day.isoformat(), new["id"], stat,
+                          new["Linha"] if new["Linha"] not in ("", None) else None,
+                          new["Odd over"] or None, new["Odd under"] or None)
+                n += 1
+        st.success(f"{n} linha(s) salva(s).")
+    st.stop()
+
+if page == "Matchups (tabela)":
     rules, params = load_matchup_rules(), load_projection_params()
     st.title("Matchups do dia")
     c1, c2, c3 = st.columns([1, 1, 2])
