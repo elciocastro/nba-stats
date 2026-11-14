@@ -14,29 +14,48 @@ Pronto e testado com dados simulados (26 testes):
 - Site Streamlit: ranking, ficha do jogador, potenciais, box score; senha opcional
 - Ranking de potencial configurável em `config/potencial.yaml`
 
-**Nada rodou ainda contra uma API real.** Esse é o primeiro passo.
+**Seção 1 concluída em 2026-11-14**: nba_api validada contra o nba.com, duas
+temporadas carregadas. Próximo passo: seção 2.
 
 ---
 
 ## 1. Validar a fonte de dados (no WSL) — [P0]
 
-- [ ] **1.1 Instalar e rodar os testes**
+- [x] **1.1 Instalar e rodar os testes**
   `pip install -e ".[web,nbaapi,dev]" && pytest`
-- [ ] **1.2 Primeira carga pequena com nba_api**
+  *Feito em 2026-11-14:* 26 testes passando.
+- [x] **1.2 Primeira carga pequena com nba_api**
   `nbastats sync-daily --days 7`. Pronto quando: `nbastats jogo GSW CHI` (ou
   outro confronto da semana) mostrar o placar e os jogadores batendo com o site
   da NBA.
-- [ ] **1.3 Conferir os dados contra uma fonte oficial**
+  *Feito em 2026-11-14:* 51 jogos e 1145 linhas em ~5 s (07/11 a 14/11),
+  `sync_log` com `status = 'ok'`. Conferido `nbastats jogo SAS GSW`
+  (13/11, GSW 85 @ SAS 123): a soma dos pontos bate com o placar dos dois
+  times, os minutos somam 240 e o +/- soma −190 (5 × −38). Observações para
+  o 1.3: os minutos vêm inteiros e jogadores DNP não aparecem.
+- [x] **1.3 Conferir os dados contra uma fonte oficial**
   Escolher 2 ou 3 jogos e comparar pontos, rebotes, assistências e minutos com
   o box score do nba.com. Atenção: jogo com prorrogação, jogador que não
   entrou (DNP) e jogo adiado.
-- [ ] **1.4 Carga das duas temporadas**
+  *Feito em 2026-11-14:* comparados com o `BoxScoreTraditionalV3` (o box
+  score da página do jogo no nba.com) WAS 140 × DET 144 (12/11, duas
+  prorrogações, 290 min), IND 106 × NYK 104 e ORL 107 × MIL 99 (13/11).
+  Placar, pontos, rebotes e assistências de todos os jogadores idênticos;
+  minutos batem, mas gravados inteiros (perde os segundos). DNP: não entram
+  na base (18 nos 3 jogos), o que é o certo para as médias. Adiado: o
+  `LeagueGameLog` só traz jogo disputado, então não há registro a corrigir;
+  todos os 1498 jogos estão `Final`.
+- [x] **1.4 Carga das duas temporadas**
   `nbastats sync-season 2025` e `nbastats sync-season 2026`. Medir o tempo e
   anotar aqui. Se o stats.nba.com der timeout, aumentar a pausa em
   `nba_api_source._default_fetcher` (hoje 0,7 s).
-- [ ] **1.5 Se algo falhar**, o erro fica em `sync_log` (`status = 'error'`).
+  *Feito em 2026-11-14:* 2025 → 1315 jogos e 28 572 linhas em 6,4 s;
+  2026 → 183 jogos e 4126 linhas em 4,5 s. Sem timeout; a pausa ficou como
+  está.
+- [x] **1.5 Se algo falhar**, o erro fica em `sync_log` (`status = 'error'`).
   Ajustar o mapeamento em `sources/nba_api_source.py` e criar um teste com a
   resposta real que quebrou.
+  *2026-11-14:* nenhuma falha; `sync_log` sem nenhum `status = 'error'`.
 
 ## 2. Validar com o colega — [P0] [?]
 
