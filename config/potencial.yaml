@@ -1,0 +1,25 @@
+# Regras do ranking de "jogadores em potencial".
+# Este arquivo é o lugar onde a experiência de quem analisa entra:
+# mude filtros e pesos aqui, sem mexer em código.
+
+# Janela recente comparada com a média da temporada
+ultimos_jogos: 10
+
+filtros:
+  min_jogos: 10          # jogos na temporada para entrar no ranking
+  min_minutos: 15        # média de minutos na temporada
+  max_anos_de_liga: 4    # temporada - ano do draft; null = sem limite
+
+# Peso de cada estatística na nota.
+# A nota soma, para cada estatística:
+#   peso * (média últimos N jogos - média temporada) / média temporada
+# Peso negativo penaliza crescimento (ex.: turnover).
+pesos:
+  pts: 1.0
+  reb: 1.0
+  ast: 1.0
+  stl: 0.5
+  blk: 0.5
+  fg3m: 0.5
+  minutes: 0.5
+  turnover: -0.5

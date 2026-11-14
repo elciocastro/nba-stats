@@ -1,0 +1,141 @@
+# ============================================================
+# .gitignore — projeto Python (scraper / coleta de dados / site)
+# ============================================================
+
+# ---------- Segredos e configuração local ----------
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+secrets/
+credentials*.json
+*credentials*.yaml
+*credentials*.yml
+.aws/
+.azure/
+
+# ---------- Ambientes virtuais ----------
+.venv/
+venv/
+env/
+ENV/
+.python-version
+
+# ---------- Cache e bytecode do Python ----------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# ---------- Build e empacotamento ----------
+build/
+dist/
+*.egg-info/
+.eggs/
+*.egg
+wheels/
+pip-wheel-metadata/
+
+# ---------- Testes, lint e type check ----------
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+.tox/
+.nox/
+.mypy_cache/
+.ruff_cache/
+.pyright/
+
+# ---------- Jupyter ----------
+.ipynb_checkpoints/
+
+# ---------- Dados coletados e saídas do scraper ----------
+# (dados se regeram rodando o coletor; não vão para o repo)
+data/
+output/
+outputs/
+downloads/
+*.csv
+*.tsv
+*.parquet
+*.xlsx
+*.jsonl
+# exemplos pequenos e fixtures de teste podem subir:
+!tests/**/*.csv
+!tests/**/*.json
+!**/sample*.csv
+!**/exemplo*.csv
+
+# ---------- Bancos locais ----------
+*.db
+*.sqlite
+*.sqlite3
+*.db-journal
+*.sqlite3-journal
+*.dump
+*.sql.gz
+
+# ---------- Logs e temporários ----------
+logs/
+*.log
+*.pid
+*.tmp
+*.bak
+*.swp
+*.swo
+*~
+tmp/
+temp/
+
+# ---------- Scraping: cache HTTP e navegador headless ----------
+.cache/
+.scrapy/
+http_cache/
+*.har
+playwright-report/
+test-results/
+screenshots/
+geckodriver.log
+chromedriver*
+
+# ---------- Streamlit ----------
+.streamlit/secrets.toml
+
+# ---------- Docker ----------
+docker-compose.override.yml
+.docker/
+
+# ---------- Terraform (se o projeto tiver infra) ----------
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!example.tfvars
+crash.log
+
+# ---------- Node (se tiver front-end) ----------
+node_modules/
+npm-debug.log*
+
+# ---------- Editores e IDEs ----------
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.example.json
+.idea/
+*.code-workspace
+
+# ---------- Ferramentas de IA (config local) ----------
+.claude/settings.local.json
+CLAUDE.local.md
+
+# ---------- Sistema operacional ----------
+.DS_Store
+Thumbs.db
+desktop.ini
+*:Zone.Identifier
