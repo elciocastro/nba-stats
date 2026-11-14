@@ -94,30 +94,53 @@ temporadas carregadas. Próximo passo: seção 2.
   (e-mail, Telegram ou só um aviso no topo do site).
 - [ ] **3.6 Backup do `data/nba.db`** (cópia diária; o arquivo é pequeno).
 
-## 3b. Matchups (L5/L10 × DvP) — [P0] [?]
+## 3b. Matchups (L5/L10 × DvP) — [P0]
 
-Pedido do colega em 2026-11-14. Método e teste retroativo em
-`docs/decisoes/0003-matchup-dvp.md`.
+Pedido do colega em 2026-11-14. Método em `docs/decisoes/0003-matchup-dvp.md`
+e `0004-dados-fase1.md`. Uma fase por PR.
 
-- [x] **3b.1 Cálculo**: L5/L10, uso, DvP temporada e 15 dias, ritmo, saldo,
-  desfalques, nota por critério (`config/matchup.yaml`).
-- [x] **3b.2 Agenda**: jogos de hoje e amanhã na base (`sync-agenda`,
-  também no `sync-daily`).
-- [x] **3b.3 Telas**: "Matchups" e "DvP" no site; `nbastats matchup` e
-  `nbastats backtest` na CLI.
-- [ ] **3b.4 Calibrar com o colega**: o DvP sozinho separa (+0,8 / −0,8 pt);
-  a nota com todos os critérios quase não separa. Decidir pesos, limites e
-  quais critérios ficam. Medir cada ajuste com `nbastats backtest`.
-- [ ] **3b.5 Reformular o visual** em torno do fluxo dele (jogo → jogador →
-  critério), depois do 3b.4.
-- [ ] **3b.6 Lesões confirmadas**: relatório oficial de lesões da NBA (hoje
-  só detectamos quem não jogou a última partida).
-- [ ] **3b.7 Linha de aposta / spread**: exige fonte de odds; hoje o risco de
-  blowout é aproximado pelo saldo médio.
-- [ ] **3b.8 Estilo**: zonas de arremesso e proteção de aro (endpoints de
-  *shot chart* da nba_api). Só se o colega achar que vale.
-- [ ] **3b.9 Posições PG/SG/SF/PF/C**: nenhuma fonte atual traz; avaliar
-  inferir pelo perfil estatístico ou aceitar G/F/C.
+**Fase 0 — base (PR #2, feito)**: L5/L10, uso, DvP temporada e 15 dias,
+ritmo, saldo, desfalques, nota por critério, agenda, telas Matchups e DvP,
+`nbastats matchup` e `backtest`.
+
+**Fase 1 — dados**
+- [x] 1a. Mercados: PRA, PR, PA, RA, 2FM/2FA, 3FM/3FA, FTM/FTA, roubos,
+  tocos, turnovers, duplo e triplo-duplo.
+- [x] 1b. Injury report oficial: Out sai da lista; Doubtful, Questionable e
+  Probable ficam marcados; desfalques do relatório.
+- [x] 1c. 5 posições estimadas (o DvP segue G/F/C; ver 0004).
+- [x] 1d. `nbastats atualizar` com intervalo mínimo e botão "Atualizar agora".
+- [ ] 1e. Instalar o cron a cada 15 min no WSL (exemplo no README).
+
+**Fase 2 — análise**
+- [ ] 2a. Projeção com número (média recente × fator DvP × ritmo × minutos)
+  no lugar da nota; teste retroativo mede o erro contra o L10.
+- [ ] 2b. Com e sem o companheiro: rendimento nos jogos em que o desfalque
+  do dia ficou fora.
+- [ ] 2c. Blowout pelos desfalques: peso de cada ausente (minutos, saldo com
+  e sem ele) e diferença esperada.
+- [ ] 2d. Amostra pequena: misturar DvP e médias com a temporada anterior
+  no começo da temporada.
+- [ ] 2e. Zonas de arremesso: de onde o jogador arremessa e onde o
+  adversário cede (`LeagueDashTeamShotLocations`).
+
+**Fase 3 — linhas de aposta**
+- [ ] 3a. Linha digitada no site; taxa de acerto (L5, L10, temporada, casa e
+  fora, contra o adversário) e diferença para a projeção.
+- [ ] 3b. API de odds. **Pendente: quais casas** (o colega informa).
+
+**Fase 4 — registro de apostas**
+- [ ] 4a. Guardar aposta (jogador, mercado, linha, over/under, odd) e
+  conferir o resultado sozinho; acompanhamento de acerto e retorno.
+
+**Fase 5 — Protocolo BetânIAG**
+- [ ] 5a. Assistente no site: escolher jogo, jogador ou time e pedir a
+  análise do protocolo sobre os dados da base. **Pendente: texto do
+  protocolo** (o usuário envia quando chegarmos aqui).
+
+**Fase 6 — visual**
+- [ ] 6a. Redesenhar as telas em torno do fluxo de análise, depois das
+  fases 2 a 5.
 
 ## 4. Métricas e análises — [P1] [?]
 

@@ -4,10 +4,10 @@ Site privado de estatísticas da NBA. Contexto e decisões em `docs/decisoes/`. 
 
 ## Comandos
 
-- Instalar: `pip install -e ".[web,nbaapi,dev]"`
+- Instalar: `pip install -e ".[web,nbaapi,injury,dev]"`
 - Testes: `pytest`
 - Site: `streamlit run src/nbastats/web/app.py`
-- Carga: `nbastats sync-season <ano>` / `nbastats sync-daily` / `nbastats sync-agenda`
+- Carga: `nbastats sync-season <ano>` / `nbastats sync-daily` / `nbastats atualizar` (a cada 15 min)
 - Matchups: `nbastats matchup [--data AAAA-MM-DD]` / `nbastats backtest <ano>`
 
 ## Regras do projeto

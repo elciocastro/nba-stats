@@ -23,7 +23,7 @@ BALLDONTLIE API ──> ingestão (upsert) ──> SQLite ──> métricas ─�
 
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
-pip install -e ".[web,nbaapi,dev]"
+pip install -e ".[web,nbaapi,injury,dev]"
 cp .env.example .env      # escolha NBASTATS_FONTE; para balldontlie, a chave
 ```
 
@@ -34,6 +34,9 @@ nbastats sync-season 2025     # temporada 2025-26 (ano de início)
 nbastats sync-season 2026     # temporada atual
 nbastats sync-daily           # últimos 3 dias + agenda de hoje e amanhã; vai no cron
 nbastats sync-agenda          # só a agenda (jogos ainda não disputados)
+nbastats lesoes               # só o injury report oficial mais recente
+nbastats atualizar            # recentes + agenda + injury report; pula se < 15 min
+nbastats atualizar --forcar   # refaz mesmo assim
 nbastats --fonte balldontlie sync-season 2026   # força uma fonte
 
 nbastats jogo GSW CHI                 # box score do confronto mais recente
@@ -43,16 +46,23 @@ nbastats potencial 2026
 
 nbastats matchup                      # jogos de hoje: L5/L10 x DvP, pontos
 nbastats matchup --data 2026-11-13 --stat reb   # data passada mostra o real
+nbastats matchup --stat pra           # mercados: pts reb ast pra pr pa ra fg2m fg2a
+                                      # fg3m fg3a ftm fta stl blk turnover dd td
 nbastats backtest 2025 --desde 2025-12-01       # o método acerta? (ver 0003)
 
 streamlit run src/nbastats/web/app.py
 ```
 
-Atualização diária pelo cron (11h, depois dos jogos da noite anterior):
+Atualização pelo cron: a carga diária às 11h (depois dos jogos da noite
+anterior) e o injury report a cada 15 minutos, das 10h às 23h:
 
 ```
-0 11 * * * cd /caminho/nba-stats && .venv/bin/nbastats sync-daily >> logs/sync.log 2>&1
+0 11 * * *       cd /caminho/nba-stats && .venv/bin/nbastats sync-daily >> logs/sync.log 2>&1
+*/15 10-23 * * * cd /caminho/nba-stats && .venv/bin/nbastats atualizar >> logs/sync.log 2>&1
 ```
+
+No site, o botão "Atualizar agora" faz o mesmo que `nbastats atualizar` e
+avisa quando a última atualização é recente.
 
 Cada execução fica registrada na tabela `sync_log`.
 
@@ -60,9 +70,9 @@ Cada execução fica registrada na tabela `sync_log`.
 
 ```
 config/potencial.yaml      regras do ranking de potencial
-config/matchup.yaml        critérios do cruzamento de matchups (DvP)
+config/matchup.yaml        critérios do cruzamento de matchups, posições e lesões
 src/nbastats/
-  sources/                 DataSource (contrato), nba_api e BALLDONTLIE
+  sources/                 DataSource (contrato), nba_api, BALLDONTLIE e injury report
   ingest/                  carga idempotente no banco
   db/                      conexão e schema.sql
   metrics/                 consultas, tendência, potencial e matchups
@@ -84,10 +94,10 @@ pytest
 
 ## Limitações conhecidas
 
-- A ingestão contra as APIs reais ainda não foi executada: os testes usam
-  respostas simuladas no formato documentado de cada fonte.
-- Com nba_api não há draft nem posição, então o filtro de anos de liga do
-  ranking de potencial não tem efeito.
+- Posição: as fontes só trazem G/F/C. PG/SG/SF/PF/C é estimado pela altura
+  e pelo perfil (`config/matchup.yaml`).
+- O injury report é guardado a partir de quando o projeto começou a buscá-lo
+  (14/11/2026); datas anteriores usam "não jogou a última partida".
 - Médias e ranking consideram só temporada regular.
 - Login é uma senha única (`NBASTATS_PASSWORD`).
 - O time do jogador é o mais recente informado pela API, não o da época de

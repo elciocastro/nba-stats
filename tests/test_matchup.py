@@ -167,3 +167,43 @@ def test_backtest_compara_com_o_real(base):
     # 4 dias com jogo (o de 11-07 sem resultado ainda). Com resultado e
     # histórico: 11-03 a_g, a_c (C ainda não jogou) e 11-05 b_g, b_c, c_g, c_c
     assert res["dias"] == 4 and total == 6
+
+
+@pytest.mark.parametrize("pos,height,ast36,reb36,expected", [
+    ("G", "6-1", 9.0, 3.0, "PG"), ("G", "6-4", 3.5, 5.0, "SG"),
+    ("G-F", "6-8", 3.0, 6.0, "SF"), ("G-F", "6-5", 2.0, 4.0, "SG"), ("F-G", "6-6", 3, 5, "SF"),
+    ("F", "6-7", 3.0, 6.0, "SF"), ("F", "6-10", 3.0, 6.0, "PF"), ("F", "6-7", 2.0, 9.5, "PF"),
+    ("F-C", "6-9", 2.0, 9.0, "PF"), ("F-C", "7-4", 3.7, 14.0, "C"), ("C-F", "6-11", 2, 12, "C"),
+    (None, "6-5", 1, 1, None),
+])
+def test_estimativa_de_posicao(pos, height, ast36, reb36, expected):
+    from nbastats.metrics.matchup import estimate_position
+    cfg = {"pg_min_ast36": 5.0, "sf_min_altura_pol": 79, "pf_min_altura_pol": 82,
+           "pf_min_reb36": 8.5, "c_min_altura_pol": 84}
+    assert estimate_position(pos, height, ast36, reb36, cfg) == expected
+
+
+def test_mercados_calculados():
+    from nbastats.metrics.matchup import _derive
+    r = _derive({"pts": 25, "reb": 11, "ast": 9, "stl": 1, "blk": 0,
+                 "fgm": 10, "fga": 20, "fg3m": 3, "fg3a": 8})
+    assert (r["pra"], r["pr"], r["pa"], r["ra"]) == (45, 36, 34, 20)
+    assert (r["fg2m"], r["fg2a"]) == (7, 12)
+    assert (r["dd"], r["td"]) == (1, 0)
+    assert _derive({"pts": 12, "reb": 10, "ast": 10})["td"] == 1
+
+
+def test_todos_os_mercados_no_relatorio(base):
+    from nbastats.metrics import MATCHUP_STATS
+    for stat in MATCHUP_STATS:
+        assert isinstance(matchup_report(base, "2026-11-07", stat, RULES), list)
+    # pivô: 10 pts, 0 reb -> PRA = pts aqui; a_g tem 22 de média
+    assert _player(matchup_report(base, "2026-11-07", "pra", RULES), "a_g")["l10"] == 22.0
+
+
+def test_dvp_com_cinco_posicoes(base):
+    # sem altura nem assistências: G -> SG, 'G-F' -> SG, F -> SF, C -> C
+    rules = {**RULES, "posicao_modo": "estimada", "posicao_estimada": {}}
+    a_g = _player(matchup_report(base, "2026-11-07", "pts", rules), "a_g")
+    assert (a_g["grupo"], a_g["posicao_est"]) == ("SG", "SG")
+    assert (a_g["dvp"], a_g["dvp_rank"]) == (17.0, 1)

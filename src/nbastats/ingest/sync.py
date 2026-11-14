@@ -8,10 +8,11 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Iterable
 
-from ..sources.base import DataSource
+from ..sources.base import DataSource, InjurySource
+from ..sources.injury_report import normalize_name
 
 BATCH = 500
 
@@ -206,3 +207,80 @@ def sync_schedule(conn, source: DataSource, dates: list[str]) -> dict[str, int]:
         return {"games": n, "stats": 0}
 
     return _logged(conn, "schedule", {"dates": dates}, work)
+
+
+def _name_index(conn) -> tuple[dict[str, int], dict[str, int]]:
+    """Chaves normalizadas -> id. Jogador: 'sobrenome,nome'; time: nome completo."""
+    players = {normalize_name(f"{r['last_name']}{r['first_name']}"): r["id"]
+               for r in conn.execute("SELECT id, first_name, last_name FROM players")}
+    teams = {normalize_name(r["full_name"]): r["id"]
+             for r in conn.execute("SELECT id, full_name FROM teams") if r["full_name"]}
+    return players, teams
+
+
+def sync_injuries(conn, source: InjurySource) -> dict[str, int]:
+    """Grava o injury report mais recente. Rodar de novo o mesmo relatório não duplica."""
+    def work() -> dict[str, int]:
+        report = source.latest()
+        if not report or not report.get("published_at"):
+            return {"games": 0, "stats": 0, "injuries": 0, "unmatched": 0}
+        report_id = int(report["published_at"].replace("-", "").replace("T", "").replace(":", ""))
+        _upsert(conn, "injury_reports", [{
+            "id": report_id, "published_at": report["published_at"],
+            "url": report.get("url"), "fetched_at": _now(),
+        }])
+        players, teams = _name_index(conn)
+        rows = []
+        for i, r in enumerate(report["rows"]):
+            rows.append({
+                "id": report_id * 1000 + i,
+                "report_id": report_id,
+                "game_date": r.get("game_date"),
+                "matchup": r.get("matchup"),
+                "team_id": teams.get(normalize_name(r.get("team"))),
+                "player_id": players.get(normalize_name(r.get("player_name"))),
+                "player_name": r.get("player_name"),
+                "status": r.get("status"),
+                "reason": r.get("reason"),
+            })
+        n = _upsert(conn, "injuries", rows)
+        unmatched = sum(1 for r in rows if r["player_id"] is None)
+        return {"games": 0, "stats": n, "injuries": n, "unmatched": unmatched,
+                "report": report["published_at"]}
+
+    return _logged(conn, "injury", {}, work)
+
+
+def last_refresh(conn) -> str | None:
+    """Quando terminou a última atualização completa bem-sucedida (UTC, ISO)."""
+    row = conn.execute(
+        "SELECT finished_at FROM sync_log WHERE kind = 'refresh' AND status = 'ok'"
+        " ORDER BY id DESC LIMIT 1").fetchone()
+    return row[0] if row else None
+
+
+def refresh(conn, source: DataSource, injury_source: InjurySource | None,
+            min_interval_min: float = 15, force: bool = False,
+            today: date | None = None, now: datetime | None = None) -> dict[str, Any]:
+    """Atualização do dia: estatísticas dos últimos 2 dias, agenda de hoje e
+    amanhã e o injury report. Se a última foi há menos de ``min_interval_min``
+    minutos, não refaz (a menos que ``force``) e diz quando foi.
+    """
+    now = now or datetime.now(timezone.utc)
+    last = last_refresh(conn)
+    if last and not force:
+        age = (now - datetime.fromisoformat(last)).total_seconds() / 60
+        if age < min_interval_min:
+            return {"pulado": True, "ultima": last, "minutos": round(age)}
+
+    today = today or date.today()
+
+    def work() -> dict[str, Any]:
+        stats = sync_range(conn, source, (today - timedelta(days=2)).isoformat(), today.isoformat())
+        agenda = sync_schedule(conn, source, [today.isoformat(), (today + timedelta(days=1)).isoformat()])
+        inj = sync_injuries(conn, injury_source) if injury_source else {"injuries": 0}
+        return {"games": stats["games"] + agenda["games"], "stats": stats["stats"],
+                "lesoes": inj.get("injuries", 0), "relatorio": inj.get("report")}
+
+    result = _logged(conn, "refresh", {"today": today.isoformat()}, work)
+    return {"pulado": False, "ultima": last_refresh(conn), **result}

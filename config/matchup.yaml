@@ -2,8 +2,28 @@
 # Este arquivo é onde a experiência de quem analisa entra: mude limites aqui,
 # sem mexer em código. Método explicado em docs/decisoes/0003-matchup-dvp.md.
 
-# Posição oficial -> grupo usado no DvP.
-# A nba_api só traz G, F e C (com híbridos); não há PG/SG/SF/PF.
+# Grupo de posição usado no DvP:
+#   estimada -> PG, SG, SF, PF, C (estimativa abaixo; nenhuma fonte grátis traz)
+#   oficial  -> G, F, C (o que a nba_api traz, com o mapa de híbridos abaixo)
+# Teste retroativo 2025-26 (separação do DvP entre as 5 piores e as 5 melhores
+# defesas): pts 1,52 (oficial) x 1,36 (estimada), reb 0,43 x 0,27,
+# ast 0,33 x 0,26, 3PM 0,13 x 0,20, PRA 1,93 x 2,14. Sem ganho claro, então
+# o DvP fica em G/F/C; a posição estimada aparece na tela como informação.
+posicao_modo: oficial
+
+# Como estimar as 5 posições a partir de G/F/C, altura e perfil.
+#   G   -> PG se assistências por 36 min >= pg_min_ast36, senão SG
+#   G-F -> SF se altura >= sf_min_altura_pol, senão SG;  F-G -> SF
+#   F   -> PF se altura >= pf_min_altura_pol ou rebotes por 36 >= pf_min_reb36, senão SF
+#   F-C -> C se altura >= c_min_altura_pol, senão PF;  C e C-F -> C
+posicao_estimada:
+  pg_min_ast36: 5.0
+  sf_min_altura_pol: 79   # 6-7
+  pf_min_altura_pol: 82   # 6-10
+  pf_min_reb36: 8.5
+  c_min_altura_pol: 84    # 7-0
+
+# Mapa usado com posicao_modo: oficial.
 # Para um híbrido, escolha onde o jogador costuma atuar de fato.
 posicoes:
   G: G
@@ -14,8 +34,15 @@ posicoes:
   C-F: C
   C: C
 
-# Estatísticas que podem ser analisadas
-estatisticas: [pts, reb, ast, fg3m, stl, blk]
+# Mercados que aparecem na tela (dd/td: a média é a frequência, 0,3 = 3 em 10 jogos)
+estatisticas: [pts, reb, ast, pra, pr, pa, ra, fg2m, fg2a, fg3m, fg3a, ftm, fta,
+               stl, blk, turnover, dd, td]
+
+# Injury report oficial
+lesoes:
+  tirar: [Out]            # some da lista (mas aparece nos desfalques)
+  # Doubtful, Questionable e Probable ficam na lista, marcados
+  desfalque_min_minutos: 15   # média de minutos no L10 para entrar em "desfalques"
 
 # Quem entra na análise
 filtros:
@@ -25,8 +52,8 @@ filtros:
 # DvP recente: só os jogos dos últimos N dias
 dvp_recente_dias: 15
 
-# Desfalque: companheiro com essa média de minutos no L10 que não jogou
-# a última partida do time (o L5 de quem ficou pode estar inflado)
+# Sem injury report para o dia: desfalque = companheiro com essa média de
+# minutos no L10 que não jogou a última partida do time
 desfalque_min_minutos: 25
 
 # Cada critério vira um "ok" ou "não" na tela. A nota é quantos passaram.

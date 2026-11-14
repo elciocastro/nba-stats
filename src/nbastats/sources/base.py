@@ -43,3 +43,12 @@ class DataSource(Protocol):
     def schedule(self, *, date: str) -> Iterable[dict[str, Any]]:
         """Jogos de um dia, inclusive os que ainda não começaram (placar vazio)."""
         ...
+
+
+class InjurySource(Protocol):
+    """Relatório de lesões. Independe da fonte de estatísticas."""
+
+    def latest(self) -> dict[str, Any] | None:
+        """{'published_at': 'AAAA-MM-DDTHH:MM', 'url': ..., 'rows': [{game_date,
+        matchup, team, player_name, status, reason}]} ou None se não houver."""
+        ...
