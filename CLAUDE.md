@@ -1,10 +1,10 @@
 # nba-stats
 
-Site privado de estatísticas da NBA. Contexto e decisões em `docs/decisoes/`.
+Site privado de estatísticas da NBA. Contexto e decisões em `docs/decisoes/`. O que fazer a seguir: `docs/BACKLOG.md`.
 
 ## Comandos
 
-- Instalar: `pip install -e ".[web,dev]"`
+- Instalar: `pip install -e ".[web,nbaapi,dev]"`
 - Testes: `pytest`
 - Site: `streamlit run src/nbastats/web/app.py`
 - Carga: `nbastats sync-season <ano>` / `nbastats sync-daily`

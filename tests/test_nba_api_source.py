@@ -1,0 +1,92 @@
+"""NbaApiSource com respostas no formato real do LeagueGameLog (sem rede)."""
+
+import pytest
+
+from nbastats.ingest import sync_range, sync_season
+from nbastats.metrics import boxscore, player_trends
+from nbastats.sources.nba_api_source import NbaApiSource, season_label, season_of
+
+TEAMS = [
+    {"id": 1610612744, "full_name": "Golden State Warriors", "abbreviation": "GSW",
+     "nickname": "Warriors", "city": "Golden State", "state": "California", "year_founded": 1946},
+    {"id": 1610612741, "full_name": "Chicago Bulls", "abbreviation": "CHI",
+     "nickname": "Bulls", "city": "Chicago", "state": "Illinois", "year_founded": 1966},
+]
+
+TEAM_ROWS = [
+    {"SEASON_ID": "22026", "TEAM_ID": 1610612744, "TEAM_ABBREVIATION": "GSW", "GAME_ID": "0022600101",
+     "GAME_DATE": "2026-11-10", "MATCHUP": "GSW vs. CHI", "PTS": 118},
+    {"SEASON_ID": "22026", "TEAM_ID": 1610612741, "TEAM_ABBREVIATION": "CHI", "GAME_ID": "0022600101",
+     "GAME_DATE": "2026-11-10", "MATCHUP": "CHI @ GSW", "PTS": 109},
+]
+
+PLAYER_ROWS = [
+    {"SEASON_ID": "22026", "PLAYER_ID": 201939, "PLAYER_NAME": "Stephen Curry", "TEAM_ID": 1610612744,
+     "GAME_ID": "0022600101", "GAME_DATE": "2026-11-10", "MATCHUP": "GSW vs. CHI", "MIN": 34,
+     "PTS": 31, "REB": 5, "AST": 7, "OREB": 0, "DREB": 5, "STL": 2, "BLK": 0, "TOV": 3, "PF": 1,
+     "FGM": 10, "FGA": 20, "FG3M": 6, "FG3A": 12, "FTM": 5, "FTA": 5, "PLUS_MINUS": 9},
+    {"SEASON_ID": "22026", "PLAYER_ID": 1630172, "PLAYER_NAME": "Patrick Williams", "TEAM_ID": 1610612741,
+     "GAME_ID": "0022600101", "GAME_DATE": "2026-11-10", "MATCHUP": "CHI @ GSW", "MIN": 28.5,
+     "PTS": 14, "REB": 8, "AST": 2, "OREB": 2, "DREB": 6, "STL": 1, "BLK": 1, "TOV": 1, "PF": 3,
+     "FGM": 5, "FGA": 11, "FG3M": 2, "FG3A": 5, "FTM": 2, "FTA": 2, "PLUS_MINUS": -9},
+]
+
+
+class FakeFetch:
+    def __init__(self):
+        self.calls = []
+
+    def __call__(self, kind, season, season_type, date_from, date_to):
+        self.calls.append((kind, season, season_type, date_from, date_to))
+        if season_type != "Regular Season":
+            return []
+        return TEAM_ROWS if kind == "T" else PLAYER_ROWS
+
+
+@pytest.fixture
+def fetch():
+    return FakeFetch()
+
+
+@pytest.fixture
+def source(fetch):
+    return NbaApiSource(fetch=fetch, teams_fn=lambda: TEAMS)
+
+
+def test_season_helpers():
+    assert season_label(2025) == "2025-26"
+    assert season_label(2099) == "2099-00"
+    assert season_of("2026-11-14") == 2026
+    assert season_of("2027-03-01") == 2026
+
+
+def test_duas_linhas_de_time_viram_um_jogo(source):
+    [game] = list(source.games(season=2026))
+    assert game["id"] == 22600101
+    assert game["home_team"]["id"] == 1610612744 and game["home_team_score"] == 118
+    assert game["visitor_team"]["id"] == 1610612741 and game["visitor_team_score"] == 109
+    assert game["season"] == 2026 and game["postseason"] is False
+
+
+def test_busca_temporada_regular_e_playoffs(source, fetch):
+    list(source.games(season=2026))
+    assert [c[2] for c in fetch.calls] == ["Regular Season", "Playoffs"]
+    assert fetch.calls[0][:2] == ("T", "2026-27")
+
+
+def test_intervalo_de_datas_no_formato_americano(source, fetch):
+    list(source.stats(start_date="2026-11-10", end_date="2026-11-12"))
+    assert fetch.calls[0] == ("P", "2026-27", "Regular Season", "11/10/2026", "11/12/2026")
+
+
+def test_ingestao_completa_e_consultas(conn, source):
+    assert sync_season(conn, source, 2026) == {"games": 1, "stats": 2}
+    assert sync_range(conn, source, "2026-11-10", "2026-11-10") == {"games": 1, "stats": 2}
+    assert conn.execute("SELECT COUNT(*) FROM player_game_stats").fetchone()[0] == 2  # idempotente
+
+    found = boxscore(conn, "chi", "gsw")
+    assert found["jogo"]["home"] == "GSW" and found["jogo"]["home_team_score"] == 118
+    assert [p["jogador"] for p in found["jogadores"]] == ["Patrick Williams", "Stephen Curry"]
+
+    curry = next(r for r in player_trends(conn, 2026) if r["jogador"] == "Stephen Curry")
+    assert (curry["pts"], curry["minutes"], curry["time"]) == (31, 34, "GSW")
