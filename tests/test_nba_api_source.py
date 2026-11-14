@@ -32,6 +32,28 @@ PLAYER_ROWS = [
 ]
 
 
+# PlayerIndex: formato real (Curry com draft; um não draftado)
+INDEX_ROWS = [
+    {"PERSON_ID": 201939, "PLAYER_LAST_NAME": "Curry", "PLAYER_FIRST_NAME": "Stephen",
+     "TEAM_ID": 1610612744, "POSITION": "G", "HEIGHT": "6-2", "WEIGHT": "185",
+     "COLLEGE": "Davidson", "COUNTRY": "USA", "DRAFT_YEAR": 2009, "DRAFT_ROUND": 1,
+     "DRAFT_NUMBER": 7},
+]
+UNDRAFTED = {"PERSON_ID": 1629001, "PLAYER_LAST_NAME": "Livre", "PLAYER_FIRST_NAME": "Agente",
+             "TEAM_ID": 0, "POSITION": "", "HEIGHT": "", "WEIGHT": None, "COLLEGE": None,
+             "COUNTRY": "USA", "DRAFT_YEAR": None, "DRAFT_ROUND": None, "DRAFT_NUMBER": None}
+
+# ScoreboardV3: um agendado, um finalizado e um de pré-temporada
+SCOREBOARD = [
+    {"gameId": "0022600236", "gameStatus": 1, "gameStatusText": "7:30 pm ET ",
+     "homeTeam": {"teamId": 1610612741, "score": 0}, "awayTeam": {"teamId": 1610612744, "score": 0}},
+    {"gameId": "0042600101", "gameStatus": 3, "gameStatusText": "Final",
+     "homeTeam": {"teamId": 1610612744, "score": 120}, "awayTeam": {"teamId": 1610612741, "score": 99}},
+    {"gameId": "0012600001", "gameStatus": 1, "gameStatusText": "8:00 pm ET",
+     "homeTeam": {"teamId": 1610612744, "score": 0}, "awayTeam": {"teamId": 1610612741, "score": 0}},
+]
+
+
 class FakeFetch:
     def __init__(self):
         self.calls = []
@@ -50,7 +72,9 @@ def fetch():
 
 @pytest.fixture
 def source(fetch):
-    return NbaApiSource(fetch=fetch, teams_fn=lambda: TEAMS)
+    return NbaApiSource(fetch=fetch, teams_fn=lambda: TEAMS,
+                        player_index_fn=lambda season: INDEX_ROWS,
+                        scoreboard_fn=lambda day: SCOREBOARD)
 
 
 def test_season_helpers():
@@ -80,8 +104,8 @@ def test_intervalo_de_datas_no_formato_americano(source, fetch):
 
 
 def test_ingestao_completa_e_consultas(conn, source):
-    assert sync_season(conn, source, 2026) == {"games": 1, "stats": 2}
-    assert sync_range(conn, source, "2026-11-10", "2026-11-10") == {"games": 1, "stats": 2}
+    assert sync_season(conn, source, 2026) == {"games": 1, "stats": 2, "players": 1}
+    assert sync_range(conn, source, "2026-11-10", "2026-11-10") == {"games": 1, "stats": 2, "players": 1}
     assert conn.execute("SELECT COUNT(*) FROM player_game_stats").fetchone()[0] == 2  # idempotente
 
     found = boxscore(conn, "chi", "gsw")
@@ -90,3 +114,39 @@ def test_ingestao_completa_e_consultas(conn, source):
 
     curry = next(r for r in player_trends(conn, 2026) if r["jogador"] == "Stephen Curry")
     assert (curry["pts"], curry["minutes"], curry["time"]) == (31, 34, "GSW")
+
+
+def test_quadra_neutra_nao_perde_o_mandante(fetch):
+    """Resposta real de 07/11/2026 (DEN x IND): as duas linhas vêm com '@'."""
+    neutral = [
+        {"SEASON_ID": "22026", "TEAM_ID": 1610612743, "GAME_ID": "0022600189",
+         "GAME_DATE": "2026-11-07", "MATCHUP": "DEN @ IND", "PTS": 114},
+        {"SEASON_ID": "22026", "TEAM_ID": 1610612754, "GAME_ID": "0022600189",
+         "GAME_DATE": "2026-11-07", "MATCHUP": "IND @ DEN", "PTS": 102},
+    ]
+    src = NbaApiSource(fetch=lambda kind, *a: neutral if kind == "T" and a[1] == "Regular Season" else [],
+                       teams_fn=lambda: TEAMS)
+    [game] = list(src.games(season=2026))
+    assert game["visitor_team"]["id"] == 1610612743 and game["visitor_team_score"] == 114
+    assert game["home_team"]["id"] == 1610612754 and game["home_team_score"] == 102
+
+
+def test_players_do_player_index():
+    src = NbaApiSource(fetch=FakeFetch(), teams_fn=lambda: TEAMS,
+                       player_index_fn=lambda season: [*INDEX_ROWS, UNDRAFTED])
+    curry, livre = list(src.players(start_date="2026-11-10"))
+    assert (curry["position"], curry["draft_year"], curry["team_id"]) == ("G", 2009, 1610612744)
+    assert livre["position"] is None and livre["draft_year"] is None and livre["team_id"] is None
+
+
+def test_agenda_do_scoreboard(source):
+    agendado, playoff = list(source.schedule(date="2026-11-15"))  # pré-temporada fica de fora
+    assert agendado["id"] == 22600236 and agendado["season"] == 2026
+    assert agendado["status"] == "7:30 pm ET" and agendado["home_team_score"] is None
+    assert playoff["postseason"] is True and playoff["home_team_score"] == 120
+
+
+def test_posicao_do_player_index_sobrevive_ao_game_log(conn, source):
+    sync_season(conn, source, 2026)  # o game log manda o Curry sem posição
+    row = conn.execute("SELECT position, draft_year FROM players WHERE id = 201939").fetchone()
+    assert (row["position"], row["draft_year"]) == ("G", 2009)

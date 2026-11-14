@@ -1,13 +1,13 @@
 # nba-stats
 
 Base de dados e site privado de estatísticas da NBA: médias, tendência
-recente, box score por jogo e um ranking configurável de jogadores em
-potencial.
+recente, box score por jogo, cruzamento de matchups (L5/L10 × defesa por
+posição) e um ranking configurável de jogadores em potencial.
 
 ```
 BALLDONTLIE API ──> ingestão (upsert) ──> SQLite ──> métricas ──> CLI / site Streamlit
                                                         ▲
-                                           config/potencial.yaml
+                                 config/potencial.yaml, config/matchup.yaml
 ```
 
 ## Pré-requisitos
@@ -32,13 +32,18 @@ cp .env.example .env      # escolha NBASTATS_FONTE; para balldontlie, a chave
 ```bash
 nbastats sync-season 2025     # temporada 2025-26 (ano de início)
 nbastats sync-season 2026     # temporada atual
-nbastats sync-daily           # últimos 3 dias; é o que vai no cron
+nbastats sync-daily           # últimos 3 dias + agenda de hoje e amanhã; vai no cron
+nbastats sync-agenda          # só a agenda (jogos ainda não disputados)
 nbastats --fonte balldontlie sync-season 2026   # força uma fonte
 
 nbastats jogo GSW CHI                 # box score do confronto mais recente
 nbastats jogo GSW CHI --data 2026-11-10
 nbastats ranking 2026 --stat reb
 nbastats potencial 2026
+
+nbastats matchup                      # jogos de hoje: L5/L10 x DvP, pontos
+nbastats matchup --data 2026-11-13 --stat reb   # data passada mostra o real
+nbastats backtest 2025 --desde 2025-12-01       # o método acerta? (ver 0003)
 
 streamlit run src/nbastats/web/app.py
 ```
@@ -55,11 +60,12 @@ Cada execução fica registrada na tabela `sync_log`.
 
 ```
 config/potencial.yaml      regras do ranking de potencial
+config/matchup.yaml        critérios do cruzamento de matchups (DvP)
 src/nbastats/
   sources/                 DataSource (contrato), nba_api e BALLDONTLIE
   ingest/                  carga idempotente no banco
   db/                      conexão e schema.sql
-  metrics/                 consultas, tendência e nota de potencial
+  metrics/                 consultas, tendência, potencial e matchups
   web/app.py               site Streamlit
   cli.py                   comando nbastats
 tests/                     pytest com fonte de dados falsa

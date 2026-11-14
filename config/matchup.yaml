@@ -1,0 +1,55 @@
+# Critérios do cruzamento de matchups (forma L5/L10 x DvP do adversário).
+# Este arquivo é onde a experiência de quem analisa entra: mude limites aqui,
+# sem mexer em código. Método explicado em docs/decisoes/0003-matchup-dvp.md.
+
+# Posição oficial -> grupo usado no DvP.
+# A nba_api só traz G, F e C (com híbridos); não há PG/SG/SF/PF.
+# Para um híbrido, escolha onde o jogador costuma atuar de fato.
+posicoes:
+  G: G
+  G-F: G
+  F-G: F
+  F: F
+  F-C: F
+  C-F: C
+  C: C
+
+# Estatísticas que podem ser analisadas
+estatisticas: [pts, reb, ast, fg3m, stl, blk]
+
+# Quem entra na análise
+filtros:
+  min_jogos: 5            # jogos na temporada antes da data analisada
+  min_minutos_l10: 20     # média de minutos nos últimos 10 jogos
+
+# DvP recente: só os jogos dos últimos N dias
+dvp_recente_dias: 15
+
+# Desfalque: companheiro com essa média de minutos no L10 que não jogou
+# a última partida do time (o L5 de quem ficou pode estar inflado)
+desfalque_min_minutos: 25
+
+# Cada critério vira um "ok" ou "não" na tela. A nota é quantos passaram.
+criterios:
+  forma:                  # L5 >= L10 * fator (fase em alta ou estável)
+    fator_l5_sobre_l10: 1.0
+  consistencia:           # L10 >= média da temporada * fator
+    fator_l10_sobre_temporada: 1.0
+  minutos:                # queda máxima de minutos do L10 para o L5
+    queda_max: 3.0
+  uso:                    # queda máxima da taxa de uso (pontos percentuais)
+    queda_max: 3.0
+  dvp_temporada:          # ranking do adversário na temporada (30 = cede mais;
+                          # 26 = entre os 5 piores, como na anotação)
+    rank_min: 26
+  dvp_recente:            # mesmo ranking, só nos últimos dvp_recente_dias
+    rank_min: 26
+  ritmo:                  # ritmo médio dos dois times acima da média da liga
+    acima_da_media: true
+  blowout:                # diferença máxima entre o saldo médio dos dois times
+    diferenca_saldo_max: 8.0
+
+# Classificação pela nota (critérios que passaram, de 0 a 8)
+classificacao:
+  forte: 7
+  bom: 5
