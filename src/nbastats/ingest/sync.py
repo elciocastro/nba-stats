@@ -279,8 +279,29 @@ def refresh(conn, source: DataSource, injury_source: InjurySource | None,
         stats = sync_range(conn, source, (today - timedelta(days=2)).isoformat(), today.isoformat())
         agenda = sync_schedule(conn, source, [today.isoformat(), (today + timedelta(days=1)).isoformat()])
         inj = sync_injuries(conn, injury_source) if injury_source else {"injuries": 0}
+        # zonas de arremesso: fotografia da temporada, basta uma vez a cada 12 h
+        season = today.year if today.month >= 10 else today.year - 1
+        recent_zones = conn.execute(
+            "SELECT 1 FROM sync_log WHERE kind = 'zones' AND status = 'ok' AND finished_at >= ?",
+            ((now - timedelta(hours=12)).isoformat(timespec="seconds"),)).fetchone()
+        if not recent_zones:
+            sync_shot_zones(conn, source, season)
         return {"games": stats["games"] + agenda["games"], "stats": stats["stats"],
                 "lesoes": inj.get("injuries", 0), "relatorio": inj.get("report")}
 
     result = _logged(conn, "refresh", {"today": today.isoformat()}, work)
     return {"pulado": False, "ultima": last_refresh(conn), **result}
+
+
+def sync_shot_zones(conn, source: DataSource, season: int) -> dict[str, int]:
+    """Fotografia das zonas de arremesso da temporada (substitui a anterior)."""
+    def work() -> dict[str, int]:
+        stamp = _now()
+        rows = [{"id": f"{season}:{z['kind']}:{z['entity_id']}:{z['zone']}", "season": season,
+                 "kind": z["kind"], "entity_id": z["entity_id"], "zone": z["zone"],
+                 "fgm": z["fgm"], "fga": z["fga"], "updated_at": stamp}
+                for z in source.shot_zones(season=season)]
+        n = _upsert(conn, "shot_zones", rows)
+        return {"games": 0, "stats": n}
+
+    return _logged(conn, "zones", {"season": season}, work)

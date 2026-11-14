@@ -207,3 +207,18 @@ def test_dvp_com_cinco_posicoes(base):
     a_g = _player(matchup_report(base, "2026-11-07", "pts", rules), "a_g")
     assert (a_g["grupo"], a_g["posicao_est"]) == ("SG", "SG")
     assert (a_g["dvp"], a_g["dvp_rank"]) == (17.0, 1)
+
+
+def test_relatorio_com_projecao(base):
+    params = {"pesos_taxa": {"l5": 0, "l10": 1, "temporada": 1}, "ausencia": {"min_minutos_l10": 15}}
+    report = matchup_report(base, "2026-11-07", "pts", RULES, params)
+    game = report[0]
+    a_g = _player(report, "a_g")
+    assert a_g["proj"] is not None and a_g["proj_detalhe"]["minutos"] == 30.0
+    # sem relatório e jogo não disputado: ausência = quem jogou algum dos 3 últimos
+    # jogos do time e ficou fora do último. a_x (30 min em 11-01, fora em 11-03) conta,
+    # mas não produziu nada, então a fração da produção fora é zero
+    assert game["producao_fora"] == {"casa": 0.0, "fora": 0.0}
+    assert game["margem_esperada"] is not None and 0 < game["risco_blowout"] < 1
+    assert any(c["companheiro"] == "a_x " for c in a_g["com_sem"])
+    assert matchup_report(base, "2026-11-07", "pts", RULES)[0].get("margem_esperada") is None

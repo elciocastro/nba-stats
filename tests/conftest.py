@@ -66,6 +66,11 @@ class FakeSource:
         self.calls.append(("players", params))
         return []
 
+    def shot_zones(self, *, season):
+        self.calls.append(("shot_zones", {"season": season}))
+        return [{"kind": "player", "entity_id": 1, "zone": "frente3", "fgm": 3.0, "fga": 10.0},
+                {"kind": "team_opp", "entity_id": 5, "zone": "frente3", "fgm": 40.0, "fga": 100.0}]
+
     def schedule(self, *, date):
         self.calls.append(("schedule", {"date": date}))
         return [{"id": 103, "date": date, "season": 2026, "status": "7:30 pm ET",

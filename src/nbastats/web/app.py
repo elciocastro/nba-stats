@@ -14,7 +14,8 @@ from nbastats import db
 from nbastats.config import get_settings
 from nbastats.ingest import last_refresh, refresh
 from nbastats.metrics import (
-    MATCHUP_STATS, boxscore, dvp_table, load_matchup_rules, load_rules, matchup_report,
+    MATCHUP_STATS, boxscore, dvp_table, load_matchup_rules, load_projection_params, load_rules,
+    matchup_report,
     player_gamelog, player_trends, rank_potenciais, seasons,
 )
 from nbastats.sources import build_injury_source, build_source
@@ -93,56 +94,86 @@ def _mark(value):
     return "✓" if value else ("–" if value is None else "✗")
 
 
-def _matchup_rows(players):
+def _matchup_rows(players, show_criteria):
     rows = []
     for p in players:
+        com_sem = "; ".join(f"sem {c['companheiro']}: {c['sem']} ({c['jogos_sem']} j) · com: {c['com']}"
+                            for c in p.get("com_sem", []) if c["jogos_sem"])
         row = {
             "Jogador": p["jogador"] + (" ⚠" if p["fora_ultimo_jogo"] and not p["lesao"] else ""),
             "Lesão": p["lesao"] or "",
-            "Time": p["time"], "Pos DvP": p["grupo"] or "?", "Pos est.": p["posicao_est"] or "?",
+            "Time": p["time"], "Pos": f"{p['grupo'] or '?'} · {p['posicao_est'] or '?'}",
             "Min L5/L10": f"{p['min_l5']:.0f} / {p['min_l10']:.0f}",
             "Temp.": p["temporada"], "L10": p["l10"], "L5": p["l5"],
-            "DvP": p["dvp"], "DvP rank": p["dvp_rank"], "DvP 15d rank": p["dvp_rec_rank"],
-            "Nota": p["nota"],
+            "Projeção": p.get("proj"), "vs L10": p.get("proj_vs_l10"),
+            "DvP rank": p["dvp_rank"], "DvP 15d": p["dvp_rec_rank"],
+            "Zonas (p.p.)": p.get("encaixe_zonas"),
+            "Com/sem desfalque": com_sem,
         }
-        row.update({CRIT_NAMES[k]: _mark(v) for k, v in p["criterios"].items()})
+        if show_criteria:
+            row["Nota"] = p["nota"]
+            row.update({CRIT_NAMES[k]: _mark(v) for k, v in p["criterios"].items()})
         if p["real"] is not None:
             row["Real"] = p["real"]
         rows.append(row)
     return rows
 
 
+def _explain(p, stat):
+    d = p.get("proj_detalhe")
+    if not d:
+        return "Sem projeção (histórico insuficiente)."
+    parts = [
+        f"**{p['jogador']}** · {STAT_NAMES.get(stat, stat)}: projeção **{d['valor']}** "
+        f"(L10 {p['l10']}, temporada {p['temporada']})",
+        f"- Base: {d['base']} = taxa por minuto (L10 e temporada) × **{d['minutos']} min** esperados",
+        f"- Defesa adversária (DvP, já com o peso da amostra): ×{d['f_dvp']}",
+        f"- Ritmo do jogo: ×{d['f_ritmo']}",
+        f"- Ajuste calibrado (nível + {100 * d['ausencia']:.0f}% da produção do time fora): ×{d['f_ajuste']}",
+    ]
+    if d.get("erro_tipico"):
+        parts.append(f"- Erro típico deste mercado: ±{d['erro_tipico']}")
+    for c in p.get("com_sem", []):
+        parts.append(f"- Com {c['companheiro']}: {c['com']} em {c['jogos_com']} jogos · "
+                     f"sem: {c['sem'] if c['sem'] is not None else '—'} em {c['jogos_sem']} jogos")
+    return "\n".join(parts)
+
+
 if page == "Matchups":
-    rules = load_matchup_rules()
+    rules, params = load_matchup_rules(), load_projection_params()
     st.title("Matchups do dia")
     c1, c2, c3 = st.columns([1, 1, 2])
     day = c1.date_input("Data", date.today(), format="DD/MM/YYYY")
     stats_ok = rules.get("estatisticas") or list(MATCHUP_STATS)
-    stat = c2.selectbox("Estatística", stats_ok, format_func=lambda s: STAT_NAMES.get(s, s))
-    so_fav = c3.toggle("Só adversário entre os piores da liga na posição (DvP)", value=False)
-    report = matchup_report(conn, day.isoformat(), stat, rules)
+    stat = c2.selectbox("Mercado", stats_ok, format_func=lambda s: STAT_NAMES.get(s, s))
+    with c3:
+        so_fav = st.toggle("Só adversário entre os piores da liga na posição (DvP)", value=False)
+        show_criteria = st.toggle("Mostrar critérios da anotação (✓/✗)", value=False)
+    report = matchup_report(conn, day.isoformat(), stat, rules, params)
     if not report:
-        st.info("Nenhum jogo nesta data. Para jogos futuros, rode `nbastats sync-agenda`.")
+        st.info("Nenhum jogo nesta data. Use \"Atualizar agora\" para buscar a agenda.")
         st.stop()
 
     rank_min = (rules.get("criterios", {}).get("dvp_temporada") or {}).get("rank_min", 26)
     with st.expander("Como ler"):
         st.markdown(f"""
-- **L5 / L10 / Temp.**: média de {STAT_NAMES[stat].lower()} nos últimos 5 e 10 jogos e na temporada,
-  só com jogos **antes** desta data.
-- **DvP**: quanto o adversário cede por jogo à posição do jogador. **Rank 30 = cede mais**
-  (alvo favorável); 1 = melhor defesa. **15d** = só os últimos {rules.get('dvp_recente_dias', 15)} dias.
-- **Pos DvP**: grupo usado no DvP (G/F/C, oficial). **Pos est.**: PG/SG/SF/PF/C **estimada** pela
-  altura e pelo perfil (nenhuma fonte grátis traz as 5). No teste retroativo, o DvP com 5 posições
-  não separou melhor que com 3; dá para trocar em `config/matchup.yaml` (`posicao_modo`).
-- **Lesão**: status no injury report oficial mais recente. Out some da lista; Doubtful,
-  Questionable e Probable ficam marcados.
-- **Nota**: quantos critérios passaram (✓). Limites em `config/matchup.yaml`.
-- **⚠**: não jogou a última partida do time e não está no injury report (confirmar se joga).
-- **Real**: aparece em datas passadas, para conferir o método.
-- **Teste retroativo (2025-26, pontos)**: contra defesas entre as 5 piores na posição, o jogador
-  fez +0,8 ponto acima do próprio L10; contra as 5 melhores, −0,8. A nota com todos os critérios
-  quase não separou (forte +0,2). Rode `nbastats backtest 2025` após mudar o YAML.
+- **Projeção**: o número esperado para o jogo. Taxa por minuto (L10 e temporada) × minutos
+  esperados × defesa adversária × ritmo × ajuste por desfalques do próprio time, calibrado com a
+  temporada passada. Fora da amostra, erra **2 a 4% menos que o L10** em todos os mercados.
+  **vs L10** = quanto a projeção fica acima ou abaixo da média recente. A lista vem ordenada por isso.
+- **L5 / L10 / Temp.**: médias nos últimos 5 e 10 jogos e na temporada, só com jogos **antes**
+  desta data.
+- **DvP rank**: posição do adversário no que cede à posição do jogador. **30 = cede mais**.
+- **Pos**: grupo do DvP (G/F/C) · posição **estimada** (PG/SG/SF/PF/C, pela altura e pelo perfil).
+- **Lesão**: injury report oficial. Out some da lista; Doubtful, Questionable e Probable ficam.
+- **Com/sem desfalque**: média do jogador nos jogos sem o companheiro que está fora hoje.
+- **Zonas (p.p.)**: aproveitamento que o adversário cede acima (+) ou abaixo (−) da liga, pesado
+  pelas zonas onde o jogador arremessa. Em 3FM/3FA só as zonas de 3; em 2FM/2FA só as de 2.
+  Detalhe por zona em "Detalhar a projeção". Ainda **não validado** no teste retroativo.
+- **Margem esperada e risco de blowout**: pelo saldo dos times, mando e desfalques. Com margem
+  esperada de 15+, cerca de 6 em cada 10 jogos terminaram decididos por 15+.
+- **⚠**: não jogou a última partida e não está no injury report (confirmar se joga).
+- **Real**: aparece em datas passadas, para conferir.
 """)
 
     for item in report:
@@ -158,29 +189,52 @@ if page == "Matchups":
                 continue
         with st.container(border=True):
             st.subheader(head)
-            r, sd, d = item["ritmo"], item["saldo"], item["desfalques"]
+            r, d = item["ritmo"], item["desfalques"]
             m1, m2, m3, m4 = st.columns(4)
-            if r["casa"] is not None and r["fora"] is not None:
-                m1.metric("Ritmo do jogo", f"{(r['casa'] + r['fora']) / 2:.1f}",
-                          f"{(r['casa'] + r['fora']) / 2 - r['liga']:+.1f} vs liga")
-                m2.metric("Saldo médio", f"{g['visitor']} {sd['fora']:+.1f} · {g['home']} {sd['casa']:+.1f}")
+            m = item.get("margem_esperada")
+            if m is not None:
+                fav = g["home"] if m >= 0 else g["visitor"]
+                m1.metric("Margem esperada", f"{fav} por {abs(m):.1f}")
+                m2.metric("Risco de blowout (15+)", f"{100 * item['risco_blowout']:.0f}%")
+            elif r["casa"] is not None and r["fora"] is not None:
+                m1.metric("Ritmo do jogo", f"{(r['casa'] + r['fora']) / 2:.1f}")
             label = (f"Injury report {item['injury_report'][11:]} ET" if item["injury_report"]
                      else "Fora no último jogo")
             m3.markdown(f"**{label} · {g['visitor']}**  \n{', '.join(d['fora']) or '—'}")
             m4.markdown(f"**{label} · {g['home']}**  \n{', '.join(d['casa']) or '—'}")
+            if r["casa"] is not None and r["fora"] is not None:
+                st.caption(f"Ritmo: {g['visitor']} {r['fora']} · {g['home']} {r['casa']} "
+                           f"(liga {r['liga']}) · posses por 48 min")
             if not players:
                 st.caption("Sem jogadores com histórico suficiente.")
                 continue
-            rows = _matchup_rows(players)
             st.dataframe(
-                rows, hide_index=True, width="stretch",
+                _matchup_rows(players, show_criteria), hide_index=True, width="stretch",
                 column_config={
+                    "Projeção": st.column_config.NumberColumn("Projeção", format="%.1f"),
+                    "vs L10": st.column_config.NumberColumn("vs L10", format="%+.1f"),
                     "Nota": st.column_config.ProgressColumn(
                         "Nota", min_value=0, max_value=len(rules.get("criterios", {})), format="%d"),
                     "DvP rank": st.column_config.NumberColumn("DvP rank", format="%dº"),
-                    "DvP 15d rank": st.column_config.NumberColumn("DvP 15d", format="%dº"),
+                    "DvP 15d": st.column_config.NumberColumn("DvP 15d", format="%dº"),
+                    "Zonas (p.p.)": st.column_config.NumberColumn("Zonas (p.p.)", format="%+.1f"),
                 },
             )
+            chosen = st.selectbox("Detalhar a projeção de", [None] + players, key=f"det{g['id']}",
+                                  format_func=lambda p: "—" if p is None else p["jogador"])
+            if chosen:
+                st.markdown(_explain(chosen, stat))
+                zm = chosen.get("zonas")
+                if zm:
+                    st.markdown(f"**Zonas de arremesso** · encaixe {zm['encaixe_pp']:+.1f} p.p. "
+                                f"(aproveitamento que o adversário cede acima da liga, nas zonas dele)")
+                    st.dataframe([{
+                        "Zona": z["zona"], "% dos arremessos dele": z["arremessos_dele_pct"],
+                        "FG% dele": z["fg_dele"], "FG% cedido pelo adversário": z["fg_cedido"],
+                        "FG% da liga": z["fg_liga"],
+                        "Volume cedido (% / liga)": f"{z['volume_cedido_pct']} / {z['volume_liga_pct']}",
+                    } for z in zm["zonas"]], hide_index=True, width="stretch")
+                    st.caption("Temporada até a última carga das zonas; não entra no teste retroativo.")
 
 elif page == "DvP":
     rules = load_matchup_rules()

@@ -395,13 +395,19 @@ def games_on(conn: sqlite3.Connection, day: str) -> list[dict[str, Any]]:
 
 
 def matchup_report(conn: sqlite3.Connection, day: str, stat: str,
-                   rules: dict[str, Any]) -> list[dict[str, Any]]:
+                   rules: dict[str, Any], params: dict[str, Any] | None = None) -> list[dict[str, Any]]:
     """Os jogos do dia com o cruzamento de cada jogador para ``stat``.
 
     Cada jogo traz contexto (ritmo, saldo, desfalques) e a lista de jogadores
     com L5/L10/temporada, uso, DvP do adversário, critérios, nota e, se o jogo
     já aconteceu, o valor real.
+
+    Com ``params`` (config/projecao.yaml), cada jogador ganha a projeção e a
+    comparação com/sem os companheiros desfalcados, e cada jogo ganha margem
+    esperada e risco de blowout (metrics/projecao.py).
     """
+    from . import projecao as pj  # importação tardia: projecao usa este módulo
+    from . import zonas as zn
     if stat not in MATCHUP_STATS:
         raise ValueError(f"Estatística inválida: {stat}. Válidas: {MATCHUP_STATS}")
     games = games_on(conn, day)
@@ -427,6 +433,22 @@ def matchup_report(conn: sqlite3.Connection, day: str, stat: str,
         dvp_temp = dvp(rows, teams, group_of)
         dvp_rec = dvp(rows, teams, group_of, since=since)
         ctx = team_context(teams)
+        if params is not None:
+            prior = pj.previous_season(conn, season)
+            aus_cfg = params.get("ausencia") or {}
+            recent = pj.recent_players(rows, aus_cfg.get("jogos_recentes", 3))
+            league = pj.league_allowed(dvp_temp)
+            n_games: dict[int, int] = defaultdict(int)
+            for (_, t) in teams:
+                n_games[t] += 1
+            last_played = {}
+            for r in rows:
+                last_played.setdefault(r["team_id"], r["game_id"])
+            in_last = {(r["team_id"], r["player_id"]) for r in rows
+                       if last_played.get(r["team_id"]) == r["game_id"]}
+            zones = zn.load_zones(conn, season)
+            only = zn.THREE if stat in ("fg3m", "fg3a") else (
+                ("aro", "garrafao", "meia") if stat in ("fg2m", "fg2a") else None)
 
         for g in (x for x in games if x["season"] == season):
             home, away = g["home_team_id"], g["visitor_team_id"]
@@ -444,6 +466,29 @@ def matchup_report(conn: sqlite3.Connection, day: str, stat: str,
                     and inj["status"] in ("Out", "Doubtful", "Questionable")
                     and (form[pid]["minutes_l10"] or 0) >= min_desf_lesao)
                     for side, team in (("casa", home), ("fora", away))}
+            proj_ctx: dict[str, Any] = {}
+            if params is not None:
+                # ausências novas (quem estava jogando): relatório oficial, box score
+                # do jogo se já aconteceu, ou quem não jogou a última partida
+                min_aus = aus_cfg.get("min_minutos_l10", 15)
+                status_fora = set(aus_cfg.get("status", ["Out", "Doubtful"]))
+                absent = {}
+                for t in (home, away):
+                    cand = [q for q in recent.get(t, set())
+                            if q in form and (form[q]["minutes_l10"] or 0) >= min_aus]
+                    if injuries["publicado"]:
+                        absent[t] = [q for q in cand
+                                     if (injuries["jogadores"].get(q) or {}).get("status") in status_fora]
+                    elif actual:
+                        absent[t] = [q for q in cand if q not in actual]
+                    else:
+                        absent[t] = [q for q in cand if (t, q) not in in_last]
+                share = {t: pj.absence_share(form, recent.get(t, set()), absent[t]) for t in absent}
+                lost = {t: pj.absent_production(form, absent[t]) for t in absent}
+                margin = pj.expected_margin(ctx["saldo"].get(home), ctx["saldo"].get(away), True,
+                                            lost[home], lost[away], params)
+                proj_ctx = {"absent": absent, "share": share, "lost": lost, "margin": margin,
+                            "blowout": pj.blowout_probability(margin, params)}
             players = []
             for p in form.values():
                 if p["team_id"] not in (home, away):
@@ -462,7 +507,29 @@ def matchup_report(conn: sqlite3.Connection, day: str, stat: str,
                 checks = _checks(p, stat, d, d_rec, ctx, home, away, crit)
                 nota = sum(1 for v in checks.values() if v)
                 real = actual.get(p["player_id"])
+                extra: dict[str, Any] = {}
+                if params is not None:
+                    team = p["team_id"]
+                    pr = pj.project(p, stat, params, prior=prior.get(p["player_id"]),
+                                    dvp_media=d["media"] if d else None,
+                                    liga_media=league.get(group, {}).get(stat) if group else None,
+                                    opp_games=n_games[opp], ritmo_time=ctx["ritmo"].get(team),
+                                    ritmo_adv=ctx["ritmo"].get(opp),
+                                    ausencia=proj_ctx["share"].get(team, 0.0))
+                    mates = sorted((q for q in proj_ctx["absent"].get(team, []) if q != p["player_id"]),
+                                   key=lambda q: form[q]["pra_l10"] or 0, reverse=True)[:2]
+                    ww = pj.with_without(rows, p["player_id"], mates, stat)
+                    zm = zn.zone_matchup(zones, p["player_id"], opp, only)
+                    extra = {
+                        "zonas": zm,
+                        "encaixe_zonas": zm["encaixe_pp"] if zm else None,
+                        "proj": pr["valor"] if pr else None,
+                        "proj_detalhe": pr,
+                        "proj_vs_l10": round(pr["valor"] - p[f"{stat}_l10"], 2) if pr else None,
+                        "com_sem": [{"companheiro": form[q]["jogador"], **ww[q]} for q in mates if q in ww],
+                    }
                 players.append({
+                    **extra,
                     "player_id": p["player_id"],
                     "jogador": p["jogador"],
                     "time": abbr.get(p["team_id"]),
@@ -488,7 +555,12 @@ def matchup_report(conn: sqlite3.Connection, day: str, stat: str,
                     "real": real[stat] if real else None,
                     "min_real": real["minutes"] if real else None,
                 })
-            players.sort(key=lambda r: (r["nota"], r["dvp_rank"] or 0, r["l5"] or 0), reverse=True)
+            if params is not None:
+                # quem a projeção põe mais acima da própria média recente
+                players.sort(key=lambda r: (r.get("proj_vs_l10") or 0) / max(r["l10"] or 0, 1),
+                             reverse=True)
+            else:
+                players.sort(key=lambda r: (r["nota"], r["dvp_rank"] or 0, r["l5"] or 0), reverse=True)
             report.append({
                 "jogo": g,
                 "ritmo": {"casa": ctx["ritmo"].get(home), "fora": ctx["ritmo"].get(away),
@@ -496,6 +568,12 @@ def matchup_report(conn: sqlite3.Connection, day: str, stat: str,
                 "saldo": {"casa": ctx["saldo"].get(home), "fora": ctx["saldo"].get(away)},
                 "desfalques": desf,
                 "injury_report": injuries["publicado"],
+                "margem_esperada": (round(proj_ctx["margin"], 1)
+                                    if proj_ctx.get("margin") is not None else None),
+                "risco_blowout": (round(proj_ctx["blowout"], 2)
+                                  if proj_ctx.get("blowout") is not None else None),
+                "producao_fora": ({"casa": round(proj_ctx["share"][home], 2),
+                                   "fora": round(proj_ctx["share"][away], 2)} if proj_ctx else None),
                 "jogadores": players,
             })
     return report

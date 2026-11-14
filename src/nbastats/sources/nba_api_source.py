@@ -76,6 +76,20 @@ def _default_scoreboard(day: str, timeout: int = 60) -> list[dict[str, Any]]:
     return body["scoreboard"]["games"]
 
 
+def _default_shot_locations(season: str, kind: str, timeout: int = 60) -> dict[str, Any]:
+    """kind 'player' (de onde cada um arremessa) ou 'team_opp' (o que cada defesa cede)."""
+    from nba_api.stats.endpoints import leaguedashplayershotlocations, leaguedashteamshotlocations
+
+    time.sleep(0.7)
+    if kind == "player":
+        ep = leaguedashplayershotlocations.LeagueDashPlayerShotLocations(
+            season=season, distance_range="By Zone", timeout=timeout)
+    else:
+        ep = leaguedashteamshotlocations.LeagueDashTeamShotLocations(
+            season=season, measure_type_simple="Opponent", distance_range="By Zone", timeout=timeout)
+    return ep.get_dict()["resultSets"]
+
+
 def _default_teams() -> list[dict[str, Any]]:
     from nba_api.stats.static import teams
 
@@ -86,11 +100,13 @@ class NbaApiSource:
     def __init__(self, fetch: Fetcher | None = None,
                  teams_fn: Callable[[], list[dict[str, Any]]] | None = None,
                  player_index_fn: Callable[[str], list[dict[str, Any]]] | None = None,
-                 scoreboard_fn: Callable[[str], list[dict[str, Any]]] | None = None) -> None:
+                 scoreboard_fn: Callable[[str], list[dict[str, Any]]] | None = None,
+                 shot_fn: Callable[[str, str], dict[str, Any]] | None = None) -> None:
         self._fetch = fetch or _default_fetcher()
         self._teams_fn = teams_fn or _default_teams
         self._player_index_fn = player_index_fn or _default_player_index
         self._scoreboard_fn = scoreboard_fn or _default_scoreboard
+        self._shot_fn = shot_fn or _default_shot_locations
 
     # ---------- DataSource ----------
 
@@ -128,6 +144,10 @@ class NbaApiSource:
             game = _game_from_scoreboard(row, date)
             if game:
                 yield game
+
+    def shot_zones(self, *, season: int) -> Iterator[dict[str, Any]]:
+        for kind in ("player", "team_opp"):
+            yield from _zones_from_result(self._shot_fn(season_label(season), kind), kind)
 
     # ---------- interno ----------
 
@@ -243,3 +263,33 @@ def _game_from_scoreboard(row: dict[str, Any], day: str) -> dict[str, Any] | Non
         "home_team_score": home.get("score") if final else None,
         "visitor_team_score": away.get("score") if final else None,
     }
+
+
+# Zonas usadas (as de canto esquerdo/direito somam em "Corner 3"; meio da quadra fica de fora)
+SHOT_ZONES = {
+    "Restricted Area": "aro",
+    "In The Paint (Non-RA)": "garrafao",
+    "Mid-Range": "meia",
+    "Corner 3": "canto3",
+    "Above the Break 3": "frente3",
+}
+
+
+def _zones_from_result(rs: dict[str, Any], kind: str) -> Iterator[dict[str, Any]]:
+    """Tabela larga do LeagueDash*ShotLocations -> uma linha por entidade e zona.
+
+    Cabeçalho: nomes das zonas na 1ª linha; na 2ª, colunas fixas e depois
+    FGM, FGA, FG_PCT para cada zona, na mesma ordem.
+    """
+    zones = rs["headers"][0]["columnNames"]
+    cols = rs["headers"][1]["columnNames"]
+    fixed = len(cols) - 3 * len(zones)
+    for row in rs["rowSet"]:
+        entity = int(row[0])
+        for i, zone in enumerate(zones):
+            key = SHOT_ZONES.get(zone)
+            if key is None:
+                continue
+            fgm, fga = row[fixed + 3 * i], row[fixed + 3 * i + 1]
+            yield {"kind": kind, "entity_id": entity, "zone": key,
+                   "fgm": float(fgm or 0), "fga": float(fga or 0)}
