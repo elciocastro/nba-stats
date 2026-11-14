@@ -2,7 +2,8 @@
 
 Base de dados e site privado de estatísticas da NBA: médias, tendência
 recente, box score por jogo, cruzamento de matchups (L5/L10 × defesa por
-posição) e um ranking configurável de jogadores em potencial.
+posição), projeção por mercado com desfalques, blowout e zonas de
+arremesso, e um ranking configurável de jogadores em potencial.
 
 ```
 BALLDONTLIE API ──> ingestão (upsert) ──> SQLite ──> métricas ──> CLI / site Streamlit
@@ -48,7 +49,9 @@ nbastats matchup                      # jogos de hoje: L5/L10 x DvP, pontos
 nbastats matchup --data 2026-11-13 --stat reb   # data passada mostra o real
 nbastats matchup --stat pra           # mercados: pts reb ast pra pr pa ra fg2m fg2a
                                       # fg3m fg3a ftm fta stl blk turnover dd td
-nbastats backtest 2025 --desde 2025-12-01       # o método acerta? (ver 0003)
+nbastats backtest 2025 --desde 2025-12-01       # critérios da anotação (ver 0003)
+nbastats calibrar 2025 --desde 2025-12-01 --validar 2026-02-15
+                                      # recalcula config/projecao.yaml (ver 0005)
 
 streamlit run src/nbastats/web/app.py
 ```
@@ -71,6 +74,7 @@ Cada execução fica registrada na tabela `sync_log`.
 ```
 config/potencial.yaml      regras do ranking de potencial
 config/matchup.yaml        critérios do cruzamento de matchups, posições e lesões
+config/projecao.yaml       parâmetros da projeção (gerado por `nbastats calibrar`)
 src/nbastats/
   sources/                 DataSource (contrato), nba_api, BALLDONTLIE e injury report
   ingest/                  carga idempotente no banco

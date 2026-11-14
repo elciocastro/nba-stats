@@ -1,0 +1,36 @@
+# Parâmetros da projeção (metrics/projecao.py).
+# Os blocos mercados, margem e blowout são recalculados por `nbastats calibrar`;
+# os demais são escolhas fixas (ver docs/decisoes/0005-projecao.md).
+# Calibrado em 2026-11-14 com a temporada 2025 (6348 jogador-jogo, desde 2025-12-01).
+
+pesos_taxa: {l5: 0, l10: 1, temporada: 3}
+pesos_minutos: {l5: 2, l10: 1, temporada: 1}
+temporada_anterior_jogos: 5
+dvp_encolhimento_jogos: 80
+ritmo_peso: 0.5
+ausencia:
+  min_minutos_l10: 15
+  jogos_recentes: 3
+  status: [Out, Doubtful]
+blowout: {pontos: 15, a: -0.995, b: 0.0806}
+mercados:
+  pts: {nivel: 0.925, ausencia: 0.574, erro_tipico: 5.14}
+  reb: {nivel: 0.939, ausencia: 0.37, erro_tipico: 1.98}
+  ast: {nivel: 0.965, ausencia: 0.328, erro_tipico: 1.55}
+  pra: {nivel: 0.937, ausencia: 0.501, erro_tipico: 6.48}
+  pr: {nivel: 0.931, ausencia: 0.527, erro_tipico: 5.99}
+  pa: {nivel: 0.934, ausencia: 0.534, erro_tipico: 5.59}
+  ra: {nivel: 0.953, ausencia: 0.351, erro_tipico: 2.75}
+  fg2m: {nivel: 0.931, ausencia: 0.68, erro_tipico: 1.58}
+  fg2a: {nivel: 0.923, ausencia: 0.752, erro_tipico: 2.22}
+  fg3m: {nivel: 0.947, ausencia: 0.253, erro_tipico: 1.02}
+  fg3a: {nivel: 0.937, ausencia: 0.423, erro_tipico: 1.65}
+  ftm: {nivel: 0.858, ausencia: 0.772, erro_tipico: 1.59}
+  fta: {nivel: 0.857, ausencia: 0.835, erro_tipico: 1.9}
+  stl: {nivel: 0.92, ausencia: 0.175, erro_tipico: 0.8}
+  blk: {nivel: 0.96, ausencia: 0.062, erro_tipico: 0.58}
+  turnover: {nivel: 0.911, ausencia: 0.58, erro_tipico: 1.0}
+  dd: {nivel: 0.851, ausencia: 0.378, erro_tipico: 0.14}
+  td: {nivel: 1.113, ausencia: 0.0, erro_tipico: 0.01}
+margem: {intercepto: 0.003, saldo: 0.827, casa: 2.076, pra_ausente_time: -0.1151,
+  pra_ausente_adv: 0.1181}

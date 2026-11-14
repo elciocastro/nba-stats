@@ -112,17 +112,17 @@ ritmo, saldo, desfalques, nota por critério, agenda, telas Matchups e DvP,
 - [x] 1d. `nbastats atualizar` com intervalo mínimo e botão "Atualizar agora".
 - [ ] 1e. Instalar o cron a cada 15 min no WSL (exemplo no README).
 
-**Fase 2 — análise**
-- [ ] 2a. Projeção com número (média recente × fator DvP × ritmo × minutos)
-  no lugar da nota; teste retroativo mede o erro contra o L10.
-- [ ] 2b. Com e sem o companheiro: rendimento nos jogos em que o desfalque
-  do dia ficou fora.
-- [ ] 2c. Blowout pelos desfalques: peso de cada ausente (minutos, saldo com
-  e sem ele) e diferença esperada.
-- [ ] 2d. Amostra pequena: misturar DvP e médias com a temporada anterior
-  no começo da temporada.
-- [ ] 2e. Zonas de arremesso: de onde o jogador arremessa e onde o
-  adversário cede (`LeagueDashTeamShotLocations`).
+**Fase 2 — análise** (método e números em `docs/decisoes/0005-projecao.md`)
+- [x] 2a. Projeção com número; fora da amostra erra 2% a 4% menos que o L10
+  em todos os mercados. `nbastats calibrar` refaz a calibração.
+- [x] 2b. Com e sem o companheiro desfalcado.
+- [x] 2c. Margem esperada e risco de blowout pelos saldos, mando e desfalques.
+- [x] 2d. Amostra pequena: temporada anterior vale 5 jogos; DvP encolhido
+  pela amostra.
+- [x] 2e. Zonas de arremesso e encaixe com o adversário (ainda sem validação
+  retroativa: é uma fotografia da temporada).
+- [ ] 2f. Recalibrar com a temporada 2026-27 a partir de dezembro.
+- [ ] 2g. Guardar a fotografia das zonas por dia, para validar o encaixe.
 
 **Fase 3 — linhas de aposta**
 - [ ] 3a. Linha digitada no site; taxa de acerto (L5, L10, temporada, casa e

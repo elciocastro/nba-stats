@@ -89,3 +89,16 @@ CREATE TABLE IF NOT EXISTS injuries (
 );
 CREATE INDEX IF NOT EXISTS idx_injuries_report ON injuries (report_id);
 CREATE INDEX IF NOT EXISTS idx_injuries_date ON injuries (game_date);
+
+-- Arremessos por zona, temporada até a data da carga (fotografia; não há
+-- histórico dia a dia). kind: 'player' = do jogador; 'team_opp' = cedido pela defesa.
+CREATE TABLE IF NOT EXISTS shot_zones (
+    id          TEXT PRIMARY KEY,     -- temporada:kind:entidade:zona
+    season      INTEGER NOT NULL,
+    kind        TEXT NOT NULL,
+    entity_id   INTEGER NOT NULL,
+    zone        TEXT NOT NULL,        -- aro, garrafao, meia, canto3, frente3
+    fgm         REAL, fga REAL,
+    updated_at  TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_zones_entity ON shot_zones (season, kind, entity_id);

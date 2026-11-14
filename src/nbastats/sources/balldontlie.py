@@ -95,6 +95,10 @@ class BallDontLie:
         # /games traz jogos futuros com placar zerado e o horário em status
         return self._paginate("/games", self._filters(None, date, date))
 
+    def shot_zones(self, *, season: int):
+        # a BALLDONTLIE não tem zonas de arremesso
+        return iter(())
+
     @staticmethod
     def _filters(season, start_date, end_date) -> dict[str, Any]:
         return {

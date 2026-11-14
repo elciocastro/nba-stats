@@ -8,9 +8,12 @@ from datetime import date, timedelta
 
 from . import db
 from .config import get_settings
-from .ingest import refresh, sync_injuries, sync_range, sync_schedule, sync_season
+from .ingest import (
+    refresh, sync_injuries, sync_range, sync_schedule, sync_season, sync_shot_zones,
+)
 from .metrics import (
-    MATCHUP_STATS, backtest, boxscore, load_matchup_rules, load_rules, matchup_report, player_trends,
+    MATCHUP_STATS, backtest, boxscore, build_dataset, calibrate, evaluate, load_projection_params,
+    save_projection_params, load_matchup_rules, load_rules, matchup_report, player_trends,
     rank_potenciais,
 )
 from .sources import FONTES, build_injury_source, build_source
@@ -45,6 +48,11 @@ def _print_matchup(item: dict, stat: str, limit: int) -> None:
     for side, team in (("fora", g["visitor"]), ("casa", g["home"])):
         if d[side]:
             print(f"desfalques {team} ({origem}): {', '.join(d[side])}")
+    if item.get("margem_esperada") is not None:
+        m = item["margem_esperada"]
+        fav = g["home"] if m >= 0 else g["visitor"]
+        print(f"margem esperada: {fav} por {abs(m):.1f}  ·  risco de blowout (15+): "
+              f"{100 * item['risco_blowout']:.0f}%")
     rows = [{**p, "nota": f"{p['nota']}/{p['nota_max']}",
              "dvp": f"{p['dvp']} ({p['dvp_rank']}º)" if p["dvp_rank"] else "-",
              "dvp_15d": f"{p['dvp_rec']} ({p['dvp_rec_rank']}º)" if p["dvp_rec_rank"] else "-",
@@ -52,10 +60,15 @@ def _print_matchup(item: dict, stat: str, limit: int) -> None:
              "real": "" if p["real"] is None else p["real"],
              "jogador": p["jogador"] + (f" [{p['lesao']}]" if p["lesao"] else "")
                         + (" *" if p["fora_ultimo_jogo"] and not p["lesao"] else ""),
-             "pos": f"{p['grupo'] or '?'}/{p['posicao_est'] or '?'}"}
+             "pos": f"{p['grupo'] or '?'}/{p['posicao_est'] or '?'}",
+             "proj": p.get("proj", ""),
+             "vs_l10": f"{p['proj_vs_l10']:+.1f}" if p.get("proj_vs_l10") is not None else "",
+             "zonas": f"{p['encaixe_zonas']:+.1f}" if p.get("encaixe_zonas") is not None else "",
+             "com/sem": "; ".join(f"sem {c['companheiro'].split()[-1]} {c['sem']} ({c['jogos_sem']}j)"
+                                  for c in p.get("com_sem", []) if c["jogos_sem"])}
             for p in item["jogadores"]]
     _table(rows, ["jogador", "time", "pos", "min_l5/l10", "temporada", "l10", "l5",
-                  "dvp", "dvp_15d", "nota", "classificacao", "real"], limit)
+                  "proj", "vs_l10", "dvp", "zonas", "nota", "real", "com/sem"], limit)
     if any(p["fora_ultimo_jogo"] for p in item["jogadores"][:limit]):
         print("* não jogou a última partida do time: confirmar se joga")
 
@@ -104,6 +117,16 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--stat", default="pts", choices=MATCHUP_STATS)
     p.add_argument("--regras", default="config/matchup.yaml")
     p.add_argument("--limite", type=int, default=8, help="jogadores por jogo")
+    p.add_argument("--params", default="config/projecao.yaml")
+
+    p = sub.add_parser("calibrar", help="recalcula os parâmetros da projeção com os jogos já disputados")
+    p.add_argument("season", type=int)
+    p.add_argument("--desde", help="AAAA-MM-DD; o começo da temporada tem pouca amostra")
+    p.add_argument("--passo", type=int, default=2, help="usa 1 dia a cada N (mais rápido)")
+    p.add_argument("--validar", help="AAAA-MM-DD: calibra antes desta data e mede o erro depois")
+    p.add_argument("--regras", default="config/matchup.yaml")
+    p.add_argument("--params", default="config/projecao.yaml")
+    p.add_argument("--nao-salvar", action="store_true")
 
     p = sub.add_parser("backtest", help="testa o cruzamento nos jogos que já aconteceram")
     p.add_argument("season", type=int)
@@ -126,6 +149,7 @@ def main(argv: list[str] | None = None) -> int:
         source = build_source(fonte, settings)
         if args.cmd == "sync-season":
             result = sync_season(conn, source, args.season)
+            sync_shot_zones(conn, source, args.season)
         else:
             today = date.today()
             start = today - timedelta(days=args.days)
@@ -159,12 +183,37 @@ def main(argv: list[str] | None = None) -> int:
 
     elif args.cmd == "matchup":
         day = args.data or date.today().isoformat()
-        report = matchup_report(conn, day, args.stat, load_matchup_rules(args.regras))
+        report = matchup_report(conn, day, args.stat, load_matchup_rules(args.regras),
+                                load_projection_params(args.params))
         if not report:
             print(f"Nenhum jogo em {day}. Rode `nbastats sync-agenda` para jogos futuros.")
             return 1
         for item in report:
             _print_matchup(item, args.stat, args.limite)
+
+    elif args.cmd == "calibrar":
+        rules, params = load_matchup_rules(args.regras), load_projection_params(args.params)
+        print("Montando o histórico (pode levar alguns minutos)...", flush=True)
+        data = build_dataset(conn, args.season, rules, params, start=args.desde, step=args.passo)
+        if not data:
+            print("Sem jogos suficientes.")
+            return 1
+        if args.validar:
+            treino = [r for r in data if r["day"] < args.validar]
+            teste = [r for r in data if r["day"] >= args.validar]
+            print(f"Validação: calibra com {len(treino)} e mede em {len(teste)} jogador-jogo "
+                  f"(desde {args.validar})\n")
+            _table(evaluate(teste, calibrate(treino, params)),
+                   ["mercado", "n", "erro_l10", "erro_projecao", "ganho_pct"], 30)
+            print()
+        new = calibrate(data, params)
+        print(f"Calibrado com {len(data)} jogador-jogo. Erro no próprio período:")
+        _table(evaluate(data, new), ["mercado", "n", "erro_l10", "erro_projecao", "ganho_pct"], 30)
+        if not args.nao_salvar:
+            save_projection_params(new, args.params,
+                                   f"Calibrado em {date.today()} com a temporada {args.season} "
+                                   f"({len(data)} jogador-jogo, desde {args.desde or 'o início'}).")
+            print(f"\nParâmetros salvos em {args.params}")
 
     elif args.cmd == "backtest":
         res = backtest(conn, args.season, args.stat, load_matchup_rules(args.regras),

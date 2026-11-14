@@ -150,3 +150,28 @@ def test_posicao_do_player_index_sobrevive_ao_game_log(conn, source):
     sync_season(conn, source, 2026)  # o game log manda o Curry sem posição
     row = conn.execute("SELECT position, draft_year FROM players WHERE id = 201939").fetchone()
     assert (row["position"], row["draft_year"]) == ("G", 2009)
+
+
+def test_zonas_de_arremesso_formato_real(conn):
+    """Formato do LeagueDashTeamShotLocations: zonas na 1ª linha do cabeçalho,
+    FGM/FGA/FG_PCT de cada zona na 2ª."""
+    zones = ["Restricted Area", "In The Paint (Non-RA)", "Mid-Range", "Left Corner 3",
+             "Right Corner 3", "Above the Break 3", "Backcourt", "Corner 3"]
+    rs = {"headers": [{"columnNames": zones},
+                      {"columnNames": ["TEAM_ID", "TEAM_NAME"] + ["OPP_FGM", "OPP_FGA", "OPP_FG_PCT"] * 8}],
+          "rowSet": [[1610612737, "Atlanta Hawks", 275, 390, .705, 69, 178, .388, 46, 95, .484,
+                      20, 50, .4, 18, 40, .45, 100, 300, .333, 0, 2, 0, 38, 90, .422]]}
+    src = NbaApiSource(fetch=FakeFetch(), teams_fn=lambda: TEAMS,
+                       shot_fn=lambda season, kind: rs if kind == "team_opp" else {
+                           "headers": [{"columnNames": zones}, {"columnNames": ["PLAYER_ID"] + ["FGM", "FGA", "FG_PCT"] * 8}],
+                           "rowSet": []})
+    rows = {r["zone"]: r for r in src.shot_zones(season=2026)}
+    assert set(rows) == {"aro", "garrafao", "meia", "canto3", "frente3"}  # cantos somados; meio da quadra fora
+    assert (rows["aro"]["fgm"], rows["aro"]["fga"]) == (275, 390)
+    assert (rows["canto3"]["fgm"], rows["canto3"]["fga"]) == (38, 90)
+    assert rows["frente3"]["kind"] == "team_opp" and rows["frente3"]["entity_id"] == 1610612737
+
+    from nbastats.ingest import sync_shot_zones
+    assert sync_shot_zones(conn, src, 2026)["stats"] == 5
+    assert sync_shot_zones(conn, src, 2026)["stats"] == 5
+    assert conn.execute("SELECT COUNT(*) FROM shot_zones").fetchone()[0] == 5  # idempotente
