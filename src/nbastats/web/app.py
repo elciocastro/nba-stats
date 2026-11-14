@@ -18,6 +18,9 @@ from nbastats.metrics import (
     matchup_report,
     player_gamelog, player_trends, rank_potenciais, seasons,
 )
+from nbastats.metrics.apostas import (
+    delete_bet, list_bets, load_bet_config, performance, settle_bets,
+)
 from nbastats.metrics.linhas import lines_for, save_line
 from nbastats.sources import build_injury_source, build_source
 from nbastats.web import props
@@ -66,6 +69,7 @@ def _refresh_box():
             except Exception as exc:  # erro fica no sync_log; aqui só avisa
                 st.sidebar.error(f"Falhou: {exc}")
                 return
+        settle_bets(conn, load_bet_config())
         if res["pulado"]:
             st.sidebar.info(f"Já atualizado há {res['minutos']} min; nada novo a buscar.")
         else:
@@ -73,8 +77,8 @@ def _refresh_box():
 
 
 _refresh_box()
-page = st.sidebar.radio("Página", ["Props", "Linhas", "Matchups (tabela)", "DvP", "Ranking",
-                                   "Jogador", "Potenciais", "Jogo"])
+page = st.sidebar.radio("Página", ["Props", "Apostas", "Linhas", "Matchups (tabela)", "DvP",
+                                   "Ranking", "Jogador", "Potenciais", "Jogo"])
 season = st.sidebar.selectbox(
     "Temporada", available, format_func=lambda s: f"{s}-{str(s + 1)[-2:]}"
 )
@@ -144,6 +148,81 @@ def _explain(p, stat):
 
 if page == "Props":
     props.render(conn, last_refresh(conn))
+    st.stop()
+
+if page == "Apostas":
+    import altair as alt
+
+    cfg = load_bet_config()
+    with st.container(horizontal=True, vertical_alignment="center"):
+        st.markdown("### Apostas")
+        if st.button("Conferir resultados", icon=":material/fact_check:"):
+            done = settle_bets(conn, cfg)
+            st.toast(f"Conferidas: {sum(done.values())}" if done else "Nada novo para conferir.")
+    perf = performance(conn)
+    g = perf["geral"]
+    if not g["apostas"]:
+        st.info("Nenhuma aposta registrada. Registre pelo detalhe do jogador na página Props "
+                "(\"Registrar aposta\") ou com `nbastats apostar`.")
+        st.stop()
+    money = cfg.get("valor_unidade")
+    cur = cfg.get("moeda", "R$")
+    lucro = g["lucro_unidades"]
+    cls = "over" if lucro > 0 else "under" if lucro < 0 else ""
+    st.html(props.DETAIL_CSS + '<style>.over{color:#22c55e}.under{color:#ef4444}</style><div class="kp">' + "".join(
+        f'<div><div class="l">{a}</div><div class="v">{b}</div><div class="s">{c}</div></div>' for a, b, c in [
+            ("APOSTAS", g["apostas"], f"{g['pendentes']} pendentes"),
+            ("ACERTO", f"{g['acerto_pct']:.0f}%" if g["acerto_pct"] is not None else "—",
+             f"chance média {g['chance_media_pct']:.0f}%" if g["chance_media_pct"] is not None else ""),
+            ("LUCRO", f'<span class="{cls}">{lucro:+.2f} u</span>',
+             f"{cur} {lucro * money:+,.2f}" if money else ""),
+            ("ROI", f'<span class="{cls}">{g["roi_pct"]:+.1f}%</span>' if g["roi_pct"] is not None else "—",
+             f"{g['unidades_apostadas']:g} u apostadas"),
+        ]) + "</div>")
+    st.caption("Acerto real vs chance média calculada: se o acerto fica abaixo da chance por muitas "
+               "apostas, o método está otimista. ROI só ganha significado depois de dezenas de apostas.")
+    if len(perf["curva"]) >= 2:
+        curve = [{"data": c["data"][8:] + "/" + c["data"][5:7], **c} for c in perf["curva"]]
+        chart = alt.Chart(alt.Data(values=curve)).mark_area(
+            line={"color": "#22c55e"}, point={"color": "#22c55e"}, color="#22c55e", opacity=0.12).encode(
+            x=alt.X("data:O", title=None, sort=None, axis=alt.Axis(labelAngle=0)),
+            y=alt.Y("lucro_acumulado:Q", title="lucro (u)"),
+            tooltip=["data:N", "lucro_acumulado:Q"])
+        st.altair_chart(chart, width="stretch", height=180)
+    else:
+        st.caption("A curva de lucro aparece a partir do segundo dia com apostas conferidas.")
+
+    tab1, tab2 = st.tabs(["Apostas", "Desempenho por grupo"])
+    with tab1:
+        status = st.pills("Status", ["pendente", "ganha", "perdida", "devolvida", "anulada"],
+                          label_visibility="collapsed")
+        bets = list_bets(conn, status=status)
+        icon = {"ganha": "✅", "perdida": "❌", "devolvida": "↩️", "anulada": "⛔", "pendente": "⏳"}
+        rows = [{"id": b["id"], "": icon.get(b["status"], ""), "Data": b["date"][8:] + "/" + b["date"][5:7],
+                 "Jogador": b["jogador"], "Aposta": f"{b['side'].capitalize()} {b['line']:g} {props.MARKETS.get(b['market'], b['market'])}",
+                 "Odd": b["odd"], "Unid.": b["units"], "Chance": b["prob"],
+                 "Real": "" if b["actual"] is None else f"{b['actual']:g}",
+                 "Lucro (u)": "" if b["profit_units"] is None else f"{b['profit_units']:+.2f}",
+                 "Casa": b["bookmaker"] or ""}
+                for b in bets]
+        ev = st.dataframe(rows, hide_index=True, width="stretch", on_select="rerun",
+                          selection_mode="single-row", key="bets_table",
+                          column_order=["", "Jogador", "Aposta", "Lucro (u)", "Real", "Odd", "Unid.",
+                                        "Chance", "Data", "Casa"],
+                          column_config={"Chance": st.column_config.ProgressColumn(
+                              "Chance", min_value=0, max_value=1, format="percent")})
+        sel = ev.selection.rows if ev and ev.selection else []
+        if sel and st.button(f"Apagar aposta #{rows[sel[0]]['id']}", type="secondary"):
+            delete_bet(conn, rows[sel[0]]["id"])
+            st.rerun()
+    with tab2:
+        for key, title in (("mercado", "Por mercado"), ("unidades", "Por unidades (stake)"),
+                           ("faixa_chance", "Por faixa de chance calculada"), ("lado", "Over x under")):
+            st.markdown(f"**{title}**")
+            st.dataframe([{"Grupo": k, "Apostas": v["conferidas"], "Acerto %": v["acerto_pct"],
+                           "Chance média %": v["chance_media_pct"], "Lucro (u)": v["lucro_unidades"],
+                           "ROI %": v["roi_pct"]} for k, v in perf[key].items()],
+                         hide_index=True, width="stretch")
     st.stop()
 
 if page == "Linhas":

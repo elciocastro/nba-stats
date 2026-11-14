@@ -14,6 +14,7 @@ import altair as alt
 import streamlit as st
 
 from nbastats.metrics import load_matchup_rules, load_projection_params, matchup_report
+from nbastats.metrics.apostas import add_bet, load_bet_config
 from nbastats.metrics.linhas import attach_lines, fair_odd, lines_for, prob_over, save_line
 
 GREEN, RED, GREY = "#22c55e", "#ef4444", "#8b98a9"
@@ -149,6 +150,30 @@ def _kpis(p: dict[str, Any], line: float, po: float | None, odd_o: float, odd_u:
         for a, b, c in cells) + "</div>"
 
 
+def _bet_form(conn, p, stat, day, line, po, odd_o, odd_u) -> None:
+    cfg = load_bet_config()
+    with st.expander("Registrar aposta", icon=":material/receipt_long:"):
+        with st.form(f"aposta_{p['player_id']}_{stat}", border=False):
+            default_side = "over" if (po or 0) >= 0.5 else "under"
+            with st.container(horizontal=True, gap="small"):
+                side = st.segmented_control("Lado", ["over", "under"], default=default_side,
+                                            format_func=str.capitalize)
+                units = st.segmented_control("Unidades", cfg.get("unidades", [0.5, 1.0, 2.0]),
+                                             default=1.0, format_func=lambda u: f"{u:g} u")
+            with st.container(horizontal=True, gap="small"):
+                odd_default = (odd_o if side == "over" else odd_u) or 1.90
+                odd = st.number_input("Odd", value=float(odd_default), min_value=1.01, step=0.01,
+                                      format="%.2f", width=96)
+                book = st.text_input("Casa", width=150)
+            note = st.text_input("Observação (opcional)")
+            if st.form_submit_button("Registrar", type="primary"):
+                prob = None if po is None else (po if side == "over" else 1 - po)
+                add_bet(conn, day=day, player_id=p["player_id"], market=stat, side=side or default_side,
+                        line=line, odd=odd, units=units or 1.0, game_id=p.get("game_id"),
+                        bookmaker=book or None, prob=prob, proj=p.get("proj"), note=note or None)
+                st.success("Aposta registrada. Ela é conferida sozinha depois do jogo (página Apostas).")
+
+
 def _detail(conn, p: dict[str, Any], stat: str, day: str, market_cfg: dict[str, Any]) -> None:
     st.html(DETAIL_CSS + (
         f'<div class="dh"><img src="{headshot(p["player_id"])}" alt="">'
@@ -178,6 +203,7 @@ def _detail(conn, p: dict[str, Any], stat: str, day: str, market_cfg: dict[str, 
     if p.get("proj_detalhe", {}).get("erro_tipico"):
         st.caption(f"Erro típico da projeção: ±{p['proj_detalhe']['erro_tipico']}. "
                    "Valor esperado positivo = a odd paga mais do que a chance calculada.")
+    _bet_form(conn, p, stat, day, line, po, odd_o, odd_u)
 
     hist = p.get("historico") or []
     if hist:

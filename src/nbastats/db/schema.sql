@@ -116,3 +116,28 @@ CREATE TABLE IF NOT EXISTS lines (
     updated_at  TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_lines_date ON lines (date, market);
+
+-- Apostas registradas. Guarda a fotografia do momento (chance, projeção,
+-- valor esperado) para medir o método depois; a conferência é automática.
+CREATE TABLE IF NOT EXISTS bets (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    created_at    TEXT NOT NULL,
+    date          TEXT NOT NULL,          -- dia do jogo
+    game_id       INTEGER,
+    player_id     INTEGER NOT NULL,
+    market        TEXT NOT NULL,
+    side          TEXT NOT NULL,          -- over | under
+    line          REAL NOT NULL,
+    odd           REAL NOT NULL,          -- decimal
+    units         REAL NOT NULL,          -- 0.5, 1, 2...
+    bookmaker     TEXT,
+    prob          REAL,                   -- chance calculada do lado apostado
+    proj          REAL,
+    ev            REAL,
+    note          TEXT,
+    status        TEXT NOT NULL DEFAULT 'pendente',  -- pendente, ganha, perdida, devolvida, anulada
+    actual        REAL,                   -- valor real do mercado
+    profit_units  REAL,
+    settled_at    TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_bets_date ON bets (date);
