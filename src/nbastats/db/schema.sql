@@ -102,3 +102,17 @@ CREATE TABLE IF NOT EXISTS shot_zones (
     updated_at  TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_zones_entity ON shot_zones (season, kind, entity_id);
+
+-- Linhas de aposta (digitadas no site/CLI ou, no futuro, de uma API de odds).
+CREATE TABLE IF NOT EXISTS lines (
+    id          TEXT PRIMARY KEY,     -- data:jogador:mercado
+    date        TEXT NOT NULL,
+    player_id   INTEGER NOT NULL,
+    market      TEXT NOT NULL,        -- pts, reb, pra, fg3m...
+    line        REAL NOT NULL,
+    odd_over    REAL,                 -- odd decimal (1.90)
+    odd_under   REAL,
+    source      TEXT,                 -- manual ou o nome da casa/API
+    updated_at  TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_lines_date ON lines (date, market);

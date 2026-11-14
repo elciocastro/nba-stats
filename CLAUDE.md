@@ -10,6 +10,7 @@ Site privado de estatísticas da NBA. Contexto e decisões em `docs/decisoes/`. 
 - Carga: `nbastats sync-season <ano>` / `nbastats sync-daily` / `nbastats atualizar` (a cada 15 min)
 - Matchups: `nbastats matchup [--data AAAA-MM-DD] [--stat pra]` / `nbastats backtest <ano>`
 - Projeção: `nbastats calibrar <ano> --desde AAAA-MM-DD --validar AAAA-MM-DD` (regrava `config/projecao.yaml`)
+- Linha da casa: `nbastats linha "<jogador>" <mercado> <linha> [--over ODD --under ODD]`
 
 ## Regras do projeto
 

@@ -277,13 +277,46 @@ def _lstsq(xs: list[list[float]], ys: list[float]) -> list[float]:
     return sol
 
 
+def _dispersion(pts: list[tuple[float, float, float]]) -> dict[str, Any]:
+    """Escolhe a distribuição da chance de over: binomial negativa ou normal.
+
+    ``pts``: (média projetada, real, L10). Testa as duas contra uma linha de
+    referência (L10 arredondado para x,5) e fica com a de menor erro de
+    probabilidade (Brier).
+    """
+    from .linhas import prob_over, reference_line
+
+    mus = [m for m, _, _ in pts]
+    excess = mean((y - m) ** 2 for m, y, _ in pts) - mean(mus)
+    r = mean(m * m for m in mus) / excess if excess > 0 else 1e6
+    # normal: desvio = k × média^e (ajuste em log dos desvios absolutos)
+    xs = [[1.0, math.log(m)] for m, _, _ in pts]
+    ys = [math.log(abs(y - m) * math.sqrt(math.pi / 2) + 0.5) for m, y, _ in pts]
+    c0, e = _lstsq(xs, ys)
+    k = math.exp(c0)
+    scale = mean(abs(y - m) * math.sqrt(math.pi / 2) for m, y, _ in pts) / mean(k * m ** e for m in mus)
+    k *= scale
+    cand = {"nb": {"dist": "nb", "r": round(min(r, 1e6), 2)},
+            "normal": {"dist": "normal", "sd_k": round(k, 3), "sd_e": round(e, 3)}}
+    brier = {}
+    for name, cfg in cand.items():
+        errs = []
+        for m, y, l10 in pts:
+            line = reference_line(l10)
+            errs.append((prob_over(m, line, cfg) - (1.0 if y > line else 0.0)) ** 2)
+        brier[name] = mean(errs)
+    best = min(brier, key=brier.get)
+    return {**cand[best], "brier": round(brier[best], 4)}
+
+
 def calibrate(data: list[dict[str, Any]], params: dict[str, Any]) -> dict[str, Any]:
     """Ajusta nível/ausência por mercado, a margem esperada e o risco de blowout."""
     out = dict(params)
     mercados = {}
     for s in MATCHUP_STATS:
-        pts = [(r["proj_base"][s], r["ausencia"], r["real"][s]) for r in data
-               if r["proj_base"].get(s) is not None]
+        full = [(r["proj_base"][s], r["ausencia"], r["real"][s], r["l10"][s]) for r in data
+                if r["proj_base"].get(s) is not None]
+        pts = [(p, a, y) for p, a, y, _ in full]
         if len(pts) < 50 or not sum(p for p, _, _ in pts):
             mercados[s] = {"nivel": 1.0, "ausencia": 0.0}
             continue
@@ -294,7 +327,9 @@ def calibrate(data: list[dict[str, Any]], params: dict[str, Any]) -> dict[str, A
             nivel, aus = sum(y for _, _, y in pts) / sum(p for p, _, _ in pts), 0.0
         erro = mean(abs(p * (nivel + aus * a) - y) for p, a, y in pts)
         mercados[s] = {"nivel": round(nivel, 3), "ausencia": round(aus, 3),
-                       "erro_tipico": round(erro, 2)}
+                       "erro_tipico": round(erro, 2),
+                       **_dispersion([(max(p * (nivel + aus * a), 0.05), y, l10)
+                                      for p, a, y, l10 in full])}
     out["mercados"] = mercados
 
     games = [r for r in data if r["saldo_time"] is not None and r["saldo_adv"] is not None]

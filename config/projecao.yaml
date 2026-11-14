@@ -14,23 +14,27 @@ ausencia:
   status: [Out, Doubtful]
 blowout: {pontos: 15, a: -0.995, b: 0.0806}
 mercados:
-  pts: {nivel: 0.925, ausencia: 0.574, erro_tipico: 5.14}
-  reb: {nivel: 0.939, ausencia: 0.37, erro_tipico: 1.98}
-  ast: {nivel: 0.965, ausencia: 0.328, erro_tipico: 1.55}
-  pra: {nivel: 0.937, ausencia: 0.501, erro_tipico: 6.48}
-  pr: {nivel: 0.931, ausencia: 0.527, erro_tipico: 5.99}
-  pa: {nivel: 0.934, ausencia: 0.534, erro_tipico: 5.59}
-  ra: {nivel: 0.953, ausencia: 0.351, erro_tipico: 2.75}
-  fg2m: {nivel: 0.931, ausencia: 0.68, erro_tipico: 1.58}
-  fg2a: {nivel: 0.923, ausencia: 0.752, erro_tipico: 2.22}
-  fg3m: {nivel: 0.947, ausencia: 0.253, erro_tipico: 1.02}
-  fg3a: {nivel: 0.937, ausencia: 0.423, erro_tipico: 1.65}
-  ftm: {nivel: 0.858, ausencia: 0.772, erro_tipico: 1.59}
-  fta: {nivel: 0.857, ausencia: 0.835, erro_tipico: 1.9}
-  stl: {nivel: 0.92, ausencia: 0.175, erro_tipico: 0.8}
-  blk: {nivel: 0.96, ausencia: 0.062, erro_tipico: 0.58}
-  turnover: {nivel: 0.911, ausencia: 0.58, erro_tipico: 1.0}
-  dd: {nivel: 0.851, ausencia: 0.378, erro_tipico: 0.14}
-  td: {nivel: 1.113, ausencia: 0.0, erro_tipico: 0.01}
+  pts: {nivel: 0.925, ausencia: 0.574, erro_tipico: 5.14, dist: normal, sd_k: 3.048,
+    sd_e: 0.291, brier: 0.2399}
+  reb: {nivel: 0.939, ausencia: 0.37, erro_tipico: 1.98, dist: nb, r: 16.58, brier: 0.2355}
+  ast: {nivel: 0.965, ausencia: 0.328, erro_tipico: 1.55, dist: nb, r: 14.92, brier: 0.2351}
+  pra: {nivel: 0.937, ausencia: 0.501, erro_tipico: 6.48, dist: normal, sd_k: 4.145,
+    sd_e: 0.221, brier: 0.2395}
+  pr: {nivel: 0.931, ausencia: 0.527, erro_tipico: 5.99, dist: normal, sd_k: 3.416,
+    sd_e: 0.273, brier: 0.2398}
+  pa: {nivel: 0.934, ausencia: 0.534, erro_tipico: 5.59, dist: normal, sd_k: 3.466,
+    sd_e: 0.253, brier: 0.2397}
+  ra: {nivel: 0.953, ausencia: 0.351, erro_tipico: 2.75, dist: nb, r: 16.66, brier: 0.2365}
+  fg2m: {nivel: 0.931, ausencia: 0.68, erro_tipico: 1.58, dist: nb, r: 21.16, brier: 0.2345}
+  fg2a: {nivel: 0.923, ausencia: 0.752, erro_tipico: 2.22, dist: nb, r: 23.59, brier: 0.2345}
+  fg3m: {nivel: 0.947, ausencia: 0.253, erro_tipico: 1.02, dist: nb, r: 8.45, brier: 0.2136}
+  fg3a: {nivel: 0.937, ausencia: 0.423, erro_tipico: 1.65, dist: nb, r: 41.05, brier: 0.223}
+  ftm: {nivel: 0.858, ausencia: 0.772, erro_tipico: 1.59, dist: nb, r: 3.07, brier: 0.2337}
+  fta: {nivel: 0.857, ausencia: 0.835, erro_tipico: 1.9, dist: nb, r: 3.18, brier: 0.2391}
+  stl: {nivel: 0.92, ausencia: 0.175, erro_tipico: 0.8, dist: nb, r: 6.77, brier: 0.2273}
+  blk: {nivel: 0.96, ausencia: 0.062, erro_tipico: 0.58, dist: nb, r: 3.98, brier: 0.1997}
+  turnover: {nivel: 0.911, ausencia: 0.58, erro_tipico: 1.0, dist: nb, r: 50.99, brier: 0.2303}
+  dd: {nivel: 0.851, ausencia: 0.378, erro_tipico: 0.14, dist: nb, r: 1000000.0, brier: 0.0758}
+  td: {nivel: 1.113, ausencia: 0.0, erro_tipico: 0.01, dist: nb, r: 1000000.0, brier: 0.0097}
 margem: {intercepto: 0.003, saldo: 0.827, casa: 2.076, pra_ausente_time: -0.1151,
   pra_ausente_adv: 0.1181}
