@@ -166,6 +166,22 @@ O IP do WSL muda quando o Windows reinicia; aí refaça o `portproxy`.
 Fora de casa: use uma VPN privada entre os seus aparelhos (ex.: Tailscale),
 em vez de abrir a porta para a internet.
 
+### Subir numa VPS para testar (Docker)
+
+```bash
+nbastats atualizar                 # dados novos no data/nba.db local
+deploy/vps.sh subir                # código do último commit + banco; gera a senha na 1ª vez
+deploy/vps.sh dados                # só troca o banco e reinicia
+deploy/vps.sh senha                # mostra a senha (fica só na VPS)
+deploy/vps.sh desativar            # remove tudo da VPS
+```
+
+Padrão: `root@45.159.173.222` com a chave `~/.ssh/netsentinel-vps`, porta
+8501 (mude com `VPS=`, `SSH_KEY=`, `PORTA=`). Na nuvem o "Atualizar agora"
+não funciona (o stats.nba.com bloqueia IPs de servidor): os dados são os do
+banco enviado. É HTTP sem cadeado: só para teste; para ficar no ar, usar um
+subdomínio com HTTPS.
+
 ### Atualização automática (cron no WSL)
 
 ```

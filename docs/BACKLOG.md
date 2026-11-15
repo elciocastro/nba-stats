@@ -187,6 +187,24 @@ ritmo, saldo, desfalques, nota por critério, agenda, telas Matchups e DvP,
   Proposta: API FastAPI sobre `metrics/` + front React, página a página
   (Início e Jogador primeiro). Aguardando decisão.
 
+**Fase 7 — API + site novo** (pedido em 2026-11-14, com sugestões do Coni)
+- [ ] 7a. API FastAPI (`src/nbastats/api/`) sobre `metrics/`, sem regra nova:
+  jogos do dia, props por mercado (com linhas), jogador (histórico, H2H,
+  janelas, recortes, minutos), destaques, notícias, DvP, linhas (gravar),
+  apostas, favoritos.
+- [ ] 7b. Front React (Vite + TypeScript, TanStack Table, gráficos
+  interativos), servido pela própria API; Streamlit segue até cobrir tudo.
+- [ ] 7c. Início e Jogador primeiro.
+- [ ] 7d. **Props integrado** (Coni): Props, Linhas, Matchups, DvP, Jogador
+  e Potenciais como abas de uma só área, com o mesmo jogo/mercado/filtro.
+- [ ] 7e. **Ao Vivo**: jogos em andamento com placar e, por jogador, o
+  parcial de pontos/rebotes/assistências/3 pts contra a média e a linha
+  (ritmo atual → projeção do final); destaca quem está a caminho de bater.
+  Fonte: placar ao vivo do nba_api (`live` endpoints), a validar.
+- [ ] 7f. **Favoritos**: jogadores, times e jogos (tabela `favorites`),
+  filtro "só favoritos" e destaque no Início.
+- [ ] 7g. Docker com API + front num contêiner; `deploy/vps.sh` igual.
+
 ## 4. Métricas e análises — [P1] [?]
 
 Dependem do item 2.3. Candidatas:
