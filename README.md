@@ -166,6 +166,38 @@ O IP do WSL muda quando o Windows reinicia; aí refaça o `portproxy`.
 Fora de casa: use uma VPN privada entre os seus aparelhos (ex.: Tailscale),
 em vez de abrir a porta para a internet.
 
+### Site novo (API + React), em migração
+
+O site novo convive com o Streamlit até cobrir todas as páginas. Hoje:
+Início e Jogador (gráficos interativos, tabela jogo a jogo ordenável e
+colorida, "e se jogar X minutos", linha da casa).
+
+```bash
+pip install -e ".[api]"
+cd frontend && npm install && npm run build && cd ..
+uvicorn nbastats.api.app:app --port 8100     # API + site em http://localhost:8100
+# desenvolvimento do front com recarga: (cd frontend && npm run dev) -> :5173
+```
+
+API documentada em `/api/docs`. Com `NBASTATS_PASSWORD`, a API pede a senha
+(cabeçalho `X-Senha`; o site pede na entrada).
+
+### Subir numa VPS para testar (Docker)
+
+```bash
+nbastats atualizar                 # dados novos no data/nba.db local
+deploy/vps.sh subir                # site novo (:8100) e antigo (:8501); gera a senha na 1ª vez
+deploy/vps.sh dados                # só troca o banco e reinicia
+deploy/vps.sh senha                # mostra a senha (fica só na VPS)
+deploy/vps.sh desativar            # remove tudo da VPS
+```
+
+Padrão: `root@45.159.173.222` com a chave `~/.ssh/netsentinel-vps`, portas
+8100 (novo) e 8501 (antigo; `PORTA_ANTIGO=` vazio não sobe o antigo). Na nuvem o "Atualizar agora"
+não funciona (o stats.nba.com bloqueia IPs de servidor): os dados são os do
+banco enviado. É HTTP sem cadeado: só para teste; para ficar no ar, usar um
+subdomínio com HTTPS.
+
 ### Atualização automática (cron no WSL)
 
 ```

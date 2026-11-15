@@ -239,18 +239,11 @@ def card_html(p: dict[str, Any], stat: str, window: int | None) -> str:
 # ---------- lista ----------
 
 def _prepare(conn, day: str, stat: str, version: str | None, params: dict[str, Any]) -> list[dict[str, Any]]:
-    report = _report(conn, day, stat, version)
-    if not report:
-        return report
-    report = attach_lines(report, stat, lines_for(conn, day, stat), params)
-    ids = tuple(sorted({p["player_id"] for g in report for p in g["jogadores"]}))
-    report = hs.attach_history(report, None, day, stat, logs=_logs(conn, day, ids, version))
-    cfg = betaniag_cfg()
-    for g in report:
-        g["validacao"] = bt.validation(g, cfg or bt.load_betaniag())
-        for p in g["jogadores"]:
-            p["selo"] = bt.seal(p, cfg) if cfg else None
-    return report
+    from nbastats.metrics.painel import day_report
+    base = (_report(conn, day, stat, version), None)
+    ids = tuple(sorted({p["player_id"] for g in base[0] for p in g["jogadores"]}))
+    return day_report(conn, day, stat, version, betaniag_cfg(), params,
+                      base=(base[0], _logs(conn, day, ids, version)))
 
 
 def open_player(pid: int) -> None:

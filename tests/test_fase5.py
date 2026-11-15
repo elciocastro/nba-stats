@@ -26,6 +26,11 @@ def _game(conn, gid, day, season, home, away, hs_, vs_, rows):
 
 @pytest.fixture
 def base(conn):
+    return build_league(conn)
+
+
+def build_league(conn):
+    """3 times, 2 temporadas (H2H em outra temporada) e um jogo agendado em 07/11."""
     for tid, ab in ((A, "AAA"), (B, "BBB"), (C, "CCC")):
         conn.execute("INSERT INTO teams (id, abbreviation) VALUES (?, ?)", (tid, ab))
     for pid, name, pos, team in ((10, "Ana", "G", A), (11, "Beto", "C", A), (20, "Caio", "G", B),

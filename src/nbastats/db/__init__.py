@@ -8,10 +8,11 @@ from pathlib import Path
 _SCHEMA = Path(__file__).with_name("schema.sql")
 
 
-def connect(path: str = "data/nba.db") -> sqlite3.Connection:
+def connect(path: str = "data/nba.db", threads: bool = False) -> sqlite3.Connection:
+    """``threads=True`` permite usar a conexão em outra thread (API)."""
     if path != ":memory:":
         Path(path).parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(path)
+    conn = sqlite3.connect(path, check_same_thread=not threads)
     conn.row_factory = sqlite3.Row
     return conn
 
