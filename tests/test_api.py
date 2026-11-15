@@ -114,3 +114,56 @@ def test_comparar_tendencias_e_noticias(client):
     assert set(client.get("/api/tendencias", params={"data": "2026-11-07"}).json()) >= {"minutos", "defesas"}
     n = client.get("/api/noticias", params={"data": "2026-11-07"}).json()
     assert n["atual"] is None and n["relatorios"] == [] and "retornos" in n
+
+
+def test_ranking_e_box_score(client):
+    r = client.get("/api/ranking", params={"data": "2026-11-07", "min_jogos": 1}).json()
+    assert r["jogadores"] and {"pts", "pts_n", "ts_pct", "time"} <= set(r["jogadores"][0])
+    p36 = client.get("/api/ranking", params={"data": "2026-11-07", "min_jogos": 1, "por36": True}).json()
+    assert p36["jogadores"]
+    j = client.get("/api/jogos", params={"data": "2026-11-30"}).json()
+    assert j["pedida"] == "2026-11-30" and j["data"] != j["pedida"] and j["jogos"]
+    gid = next(x["id"] for x in j["jogos"] if x["tem_box"])
+    box = client.get(f"/api/jogo/{gid}").json()
+    assert len(box["times"]) == 2 and box["times"][0]["jogadores"]
+    assert client.get("/api/jogo/987654").status_code == 404
+
+
+def test_usuarios_admin_e_sessao(client, monkeypatch):
+    monkeypatch.setenv("NBASTATS_PASSWORD", "unica")
+    assert client.get("/api/saude").json()["modo"] == "senha"
+    assert client.post("/api/admin/usuarios", headers={"X-Senha": "unica"}, json={"login": "a"}).status_code == 409
+    # 1º admin exige a senha única
+    assert client.post("/api/primeiro-admin", json={"login": "chefe", "senha": "senha-forte"}).status_code == 401
+    r = client.post("/api/primeiro-admin", json={"login": "chefe", "senha": "senha-forte", "senha_atual": "unica"})
+    adm = {"Authorization": f"Bearer {r.json()['token']}"}
+    assert client.post("/api/primeiro-admin", json={"login": "x", "senha": "senha-forte"}).status_code == 409
+    # agora só com sessão (a senha única deixa de valer)
+    assert client.get("/api/meta", headers={"X-Senha": "unica"}).status_code == 401
+    meta = client.get("/api/meta", headers=adm).json()
+    assert meta["modo"] == "usuarios" and meta["usuario"]["papel"] == "admin"
+    novo = client.post("/api/admin/usuarios", headers=adm, json={"login": "coni", "nome": "Coni"}).json()
+    login = client.post("/api/login", json={"login": "coni", "senha": novo["senha_provisoria"]}).json()
+    coni = {"Authorization": f"Bearer {login['token']}"}
+    assert login["usuario"]["trocar_senha"]
+    assert client.get("/api/props", headers=coni).status_code == 403  # troca a senha antes
+    assert client.post("/api/eu/senha", headers=coni,
+                       json={"atual": novo["senha_provisoria"], "nova": "minha-senha"}).json() == {"ok": True}
+    assert client.get("/api/ranking", headers=coni, params={"data": "2026-11-07"}).status_code == 200
+    assert client.get("/api/admin/usuarios", headers=coni).status_code == 403
+    users = client.get("/api/admin/usuarios", headers=adm).json()["usuarios"]
+    cid = next(u["id"] for u in users if u["login"] == "coni")
+    assert client.patch(f"/api/admin/usuarios/{cid}", headers=adm, json={"ativo": False}).json() == {"ok": True}
+    assert client.get("/api/meta", headers=coni).status_code == 401
+    acessos = client.get("/api/admin/acessos", headers=adm).json()["acessos"]
+    assert {a["login"] for a in acessos} == {"chefe", "coni"}
+    assert client.post("/api/login", json={"login": "coni", "senha": "errada"}).status_code == 401
+    assert client.delete(f"/api/admin/usuarios/{users[0]['id']}", headers=adm).status_code == 422  # a si mesmo
+
+
+def test_sistema_e_backup(client, monkeypatch, tmp_path):
+    monkeypatch.setattr(api, "BACKUP_DIR", str(tmp_path))
+    st = client.get("/api/admin/sistema").json()
+    assert {"carga", "backup", "cargas"} <= set(st)
+    assert client.post("/api/admin/backup").json()["quantidade"] == 1
+    assert "alerta" in client.get("/api/meta").json()

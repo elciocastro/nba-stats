@@ -150,3 +150,41 @@ CREATE TABLE IF NOT EXISTS favorites (
     label       TEXT,
     created_at  TEXT NOT NULL
 );
+
+-- Acesso ao site (painel de administração). Senha com PBKDF2 (sal por usuário).
+CREATE TABLE IF NOT EXISTS users (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    login         TEXT NOT NULL UNIQUE,
+    nome          TEXT,
+    senha_hash    TEXT NOT NULL,      -- pbkdf2_sha256$iteracoes$sal$hash
+    papel         TEXT NOT NULL DEFAULT 'usuario',   -- admin | usuario
+    ativo         INTEGER NOT NULL DEFAULT 1,
+    expira_em     TEXT,               -- AAAA-MM-DD: acesso até esta data (opcional)
+    trocar_senha  INTEGER NOT NULL DEFAULT 0,        -- pede nova senha no próximo login
+    criado_em     TEXT NOT NULL,
+    ultimo_acesso TEXT
+);
+
+-- Sessões: guarda só o hash do token (quem lê o banco não entra no site).
+CREATE TABLE IF NOT EXISTS sessions (
+    token_hash  TEXT PRIMARY KEY,
+    user_id     INTEGER NOT NULL,
+    criado_em   TEXT NOT NULL,
+    expira_em   TEXT NOT NULL,
+    ultimo_uso  TEXT,
+    ip          TEXT,
+    agente      TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions (user_id);
+
+-- Tentativas de login (certas e erradas), para o painel e o bloqueio.
+CREATE TABLE IF NOT EXISTS access_log (
+    id        INTEGER PRIMARY KEY AUTOINCREMENT,
+    quando    TEXT NOT NULL,
+    login     TEXT,
+    user_id   INTEGER,
+    ok        INTEGER NOT NULL,
+    ip        TEXT,
+    motivo    TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_access_quando ON access_log (quando);

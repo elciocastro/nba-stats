@@ -1,4 +1,4 @@
-// Cliente da API (FastAPI em /api). A senha vai no cabeçalho X-Senha.
+// Cliente da API (FastAPI em /api). Sessão: Authorization Bearer; senha única (sem usuários): X-Senha.
 
 export type Janela = { jogos: number; over: number; pct: number | null; media: number | null };
 export type Selo = { nivel: string; cor: string; texto: string; unidade: number | null };
@@ -71,18 +71,36 @@ export type Inicio = {
              uso_l5: number | null; proj: number | null; lesao: string | null; valores: number[] }[];
 };
 
-export type Meta = { mercados: Record<string, string>; hoje: string; atualizado: string | null; betaniag: boolean };
+export type Usuario = { id: number; login: string; nome: string; papel: "admin" | "usuario"; trocar_senha: boolean; expira_em: string | null };
+export type Modo = "usuarios" | "senha" | "aberto";
+export type Meta = { mercados: Record<string, string>; hoje: string; atualizado: string | null; betaniag: boolean;
+  modo: Modo; usuario: Usuario | null; alerta: string | null };
 
-export class SenhaError extends Error {}
+export class SenhaError extends Error {
+  constructor(public modo: Modo = "senha") { super("login"); }
+}
 
-const senha = () => localStorage.getItem("senha") ?? "";
+const store = {
+  get: (k: string) => { try { return localStorage.getItem(k) ?? ""; } catch { return ""; } },
+  set: (k: string, v: string) => { try { if (v) localStorage.setItem(k, v); else localStorage.removeItem(k); } catch { /* sem storage */ } },
+};
+const authHeaders = (): Record<string, string> => {
+  const h: Record<string, string> = {};
+  if (store.get("token")) h.Authorization = `Bearer ${store.get("token")}`;
+  if (store.get("senha")) h["X-Senha"] = store.get("senha");
+  return h;
+};
 
-async function call<T>(path: string, init?: RequestInit): Promise<T> {
+export async function call<T>(path: string, init?: RequestInit): Promise<T> {
   const r = await fetch(path, {
     ...init,
-    headers: { "Content-Type": "application/json", "X-Senha": senha(), ...(init?.headers ?? {}) },
+    headers: { "Content-Type": "application/json", ...authHeaders(), ...(init?.headers ?? {}) },
   });
-  if (r.status === 401) throw new SenhaError("senha");
+  if (r.status === 401) {
+    const b = await r.json().catch(() => ({}));
+    if (b.detail === "login") throw new SenhaError(b.modo ?? "senha");
+    throw new Error(b.detail ?? "Não autorizado");
+  }
   if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail ?? r.statusText);
   return r.json();
 }
@@ -111,12 +129,20 @@ export const api = {
   favoritar: (tipo: string, id: number, nome?: string) =>
     call<Favoritos>("/api/favoritos", { method: "POST", body: JSON.stringify({ tipo, id, nome }) }),
   desfavoritar: (tipo: string, id: number) => call<Favoritos>(`/api/favoritos/${tipo}/${id}`, { method: "DELETE" }),
-  login: async (s: string) => {
+  saude: () => call<{ ok: boolean; modo: Modo }>("/api/saude"),
+  login: async (login: string, senha: string) => {
     const r = await fetch("/api/login", { method: "POST", headers: { "Content-Type": "application/json" },
-                                          body: JSON.stringify({ senha: s }) });
-    if (!r.ok) throw new SenhaError("Senha incorreta");
-    localStorage.setItem("senha", s);
+                                          body: JSON.stringify({ login, senha }) });
+    const b = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(b.detail ?? "Senha incorreta");
+    if (b.token) { store.set("token", b.token); store.set("senha", ""); } else store.set("senha", senha);
   },
+  primeiroAdmin: async (body: { login: string; nome?: string; senha: string; senha_atual?: string }) => {
+    const b = await call<{ token: string }>("/api/primeiro-admin", { method: "POST", body: JSON.stringify(body) });
+    store.set("token", b.token); store.set("senha", "");
+  },
+  sair: async () => { await call("/api/sair", { method: "POST" }).catch(() => null); store.set("token", ""); store.set("senha", ""); },
+  trocarSenha: (atual: string, nova: string) => call<{ ok: boolean }>("/api/eu/senha", { method: "POST", body: JSON.stringify({ atual, nova }) }),
 };
 
 export const headshot = (id: number) => `https://cdn.nba.com/headshots/nba/latest/260x190/${id}.png`;
@@ -133,9 +159,7 @@ export type LiveGame = {
   jogadores: LivePlayer[];
 };
 export const aoVivo = (mercado: string, alvo: string) =>
-  fetch(`/api/aovivo?mercado=${mercado}&alvo=${alvo}`, { headers: { "X-Senha": localStorage.getItem("senha") ?? "" } })
-    .then(async (r) => { if (r.status === 401) throw new SenhaError("senha"); if (!r.ok) throw new Error((await r.json()).detail); return r.json(); }) as
-    Promise<{ data: string | null; jogos: LiveGame[]; destaques: LivePlayer[]; atualizado_ha: number }>;
+  call<{ data: string | null; jogos: LiveGame[]; destaques: LivePlayer[]; atualizado_ha: number }>(`/api/aovivo?mercado=${mercado}&alvo=${alvo}`);
 
 // ---------- apostas, comparar, notícias ----------
 export type Bet = { id: number; date: string; jogador: string; player_id: number; market: string; side: string;
@@ -154,9 +178,7 @@ export type Noticias = { atual: string | null; anterior: string | null;
   retornos: { player_id: number; jogador: string; time: string; status: string; jogos_fora: number | null; minutos_antes: number;
               pts: number; reb: number; ast: number; pra: number; pra_por_min: number; motivo: string | null }[] };
 
-const j = <T,>(path: string, init?: RequestInit) =>
-  fetch(path, { ...init, headers: { "Content-Type": "application/json", "X-Senha": localStorage.getItem("senha") ?? "" } })
-    .then(async (r) => { if (r.status === 401) throw new SenhaError("senha"); if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail ?? r.statusText); return r.json() as Promise<T>; });
+const j = call;
 
 export const api2 = {
   apostas: (status?: string) => j<{ apostas: Bet[]; desempenho: Desempenho; config: { valor_unidade: number | null; moeda: string; unidades: number[] } }>(
@@ -171,4 +193,42 @@ export const api2 = {
     defesas: { time: string; grupo: string; pra_temporada: number; pra_recente: number; dif: number; rank_recente: number }[] }>(`/api/tendencias?data=${data}`),
   noticias: (data: string) => j<Noticias>(`/api/noticias?data=${data}`),
   atualizar: (forcar = false) => j<{ pulado: boolean; minutos?: number; relatorio?: string | null }>(`/api/atualizar?forcar=${forcar}`, { method: "POST" }),
+};
+
+// ---------- ranking, jogos, administração ----------
+export type RankRow = { player_id: number; jogador: string; posicao: string | null; time: string; jogos: number;
+  fg_pct: number | null; fg3_pct: number | null; ft_pct: number | null; ts_pct: number | null; fga: number; fg3a: number; fta: number;
+  [k: string]: number | string | null };
+export type JogoDia = { id: number; date: string; status: string | null; placar_casa: number | null; placar_fora: number | null;
+  casa: string; fora: string; casa_id: number; fora_id: number; tem_box: boolean };
+export type BoxRow = { player_id: number; jogador: string; posicao: string | null; min: number; pts: number; reb: number; ast: number;
+  stl: number; blk: number; turnover: number; pf: number; fgm: number; fga: number; fg3m: number; fg3a: number; ftm: number; fta: number;
+  oreb: number; dreb: number; plus_minus: number | null; pra: number };
+export type BoxTime = { lado: string; time_id: number; time: string; nome: string; placar: number | null; jogadores: BoxRow[];
+  nao_jogaram: string[]; totais: Record<string, number | null> };
+export type UsuarioAdm = { id: number; login: string; nome: string; papel: string; ativo: boolean; expira_em: string | null;
+  trocar_senha: boolean; criado_em: string; ultimo_acesso: string | null; sessoes: number };
+export type Acesso = { quando: string; login: string | null; ok: boolean; ip: string | null; motivo: string | null };
+export type Sistema = { carga: { ultima_ok: string | null; horas: number | null; alerta: string | null;
+    falhas: { kind: string; started_at: string; error: string | null }[] };
+  backup: { quantidade: number; ultimo: string | null; horas: number | null; tamanho_mb: number | null; alerta: string | null };
+  cargas: { kind: string; started_at: string; finished_at: string | null; status: string; games: number; stats: number; error: string | null }[];
+  banco_mb: number | null };
+
+export const api3 = {
+  ranking: (data: string, janela: number, min_jogos: number, por36: boolean, playoffs: boolean) =>
+    call<{ temporada: number; janela: number; jogadores: RankRow[] }>(`/api/ranking?${qs({ data, janela, min_jogos, por36, playoffs })}`),
+  jogos: (data: string) => call<{ data: string; pedida: string; jogos: JogoDia[] }>(`/api/jogos?${qs({ data })}`),
+  jogo: (id: number) => call<{ id: number; data: string; status: string | null; playoffs: boolean; times: BoxTime[] }>(`/api/jogo/${id}`),
+  usuarios: () => call<{ usuarios: UsuarioAdm[]; papeis: string[] }>("/api/admin/usuarios"),
+  criarUsuario: (b: { login: string; nome?: string; papel: string; expira_em?: string | null }) =>
+    call<{ id: number; senha_provisoria: string }>("/api/admin/usuarios", { method: "POST", body: JSON.stringify(b) }),
+  mudarUsuario: (id: number, b: { nome?: string; papel?: string; ativo?: boolean; expira_em?: string | null; mudar_validade?: boolean }) =>
+    call<{ ok: boolean }>(`/api/admin/usuarios/${id}`, { method: "PATCH", body: JSON.stringify(b) }),
+  resetarSenha: (id: number) => call<{ senha_provisoria: string }>(`/api/admin/usuarios/${id}/senha`, { method: "POST" }),
+  derrubar: (id: number) => call<{ encerradas: number }>(`/api/admin/usuarios/${id}/sair`, { method: "POST" }),
+  apagarUsuario: (id: number) => call<{ ok: boolean }>(`/api/admin/usuarios/${id}`, { method: "DELETE" }),
+  acessos: () => call<{ acessos: Acesso[] }>("/api/admin/acessos"),
+  sistema: () => call<Sistema>("/api/admin/sistema"),
+  backup: () => call<{ arquivo: string }>("/api/admin/backup", { method: "POST" }),
 };

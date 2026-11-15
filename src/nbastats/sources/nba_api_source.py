@@ -90,6 +90,16 @@ def _default_shot_locations(season: str, kind: str, timeout: int = 60) -> dict[s
     return ep.get_dict()["resultSets"]
 
 
+# nba_api não traz conferência/divisão; os 30 times mudam raramente.
+DIVISIONS = {
+    "Atlantic": ("BOS", "BKN", "NYK", "PHI", "TOR"), "Central": ("CHI", "CLE", "DET", "IND", "MIL"),
+    "Southeast": ("ATL", "CHA", "MIA", "ORL", "WAS"), "Northwest": ("DEN", "MIN", "OKC", "POR", "UTA"),
+    "Pacific": ("GSW", "LAC", "LAL", "PHX", "SAC"), "Southwest": ("DAL", "HOU", "MEM", "NOP", "SAS"),
+}
+EAST = ("Atlantic", "Central", "Southeast")
+TEAM_DIVISION = {abbr: div for div, teams in DIVISIONS.items() for abbr in teams}
+
+
 def _default_teams() -> list[dict[str, Any]]:
     from nba_api.stats.static import teams
 
@@ -118,8 +128,8 @@ class NbaApiSource:
                 "city": t.get("city"),
                 "name": t.get("nickname"),
                 "full_name": t.get("full_name"),
-                "conference": None,
-                "division": None,
+                "conference": _conference(t["abbreviation"]),
+                "division": TEAM_DIVISION.get(t["abbreviation"]),
             }
 
     def games(self, *, season=None, start_date=None, end_date=None) -> Iterator[dict[str, Any]]:
@@ -293,3 +303,8 @@ def _zones_from_result(rs: dict[str, Any], kind: str) -> Iterator[dict[str, Any]
             fgm, fga = row[fixed + 3 * i], row[fixed + 3 * i + 1]
             yield {"kind": kind, "entity_id": entity, "zone": key,
                    "fgm": float(fgm or 0), "fga": float(fga or 0)}
+
+
+def _conference(abbr: str) -> str | None:
+    div = TEAM_DIVISION.get(abbr)
+    return None if div is None else ("East" if div in EAST else "West")
