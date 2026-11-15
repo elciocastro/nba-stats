@@ -19,11 +19,11 @@ from typing import Any
 import altair as alt
 import streamlit as st
 
-from nbastats.metrics import load_matchup_rules, load_projection_params, matchup_report
 from nbastats.metrics import betaniag as bt
 from nbastats.metrics import historico as hs
+from nbastats.metrics import load_matchup_rules, load_projection_params, matchup_report
 from nbastats.metrics.apostas import add_bet, load_bet_config
-from nbastats.metrics.linhas import attach_lines, fair_odd, lines_for, prob_over, save_line
+from nbastats.metrics.linhas import fair_odd, prob_over, save_line
 
 GREEN, RED, GREY = "#22c55e", "#ef4444", "#8b98a9"
 

@@ -1,7 +1,7 @@
 // Service worker do NBA Stats: guarda só o "casco" do site (HTML, JS, CSS,
 // ícones) para abrir rápido e funcionar com conexão ruim. Os dados (/api)
 // nunca vão para o cache: são privados e mudam a todo momento.
-const CACHE = "nbastats-v1";
+const CACHE = "nbastats-v2";
 const SHELL = ["/", "/manifest.json", "/icon-192.png"];
 
 self.addEventListener("install", (e) => {

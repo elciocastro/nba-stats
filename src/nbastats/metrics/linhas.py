@@ -12,9 +12,9 @@ from __future__ import annotations
 
 import math
 import sqlite3
+from collections.abc import Iterable
 from datetime import datetime, timezone
-from typing import Any, Iterable
-
+from typing import Any
 
 # ---------- distribuição ----------
 
@@ -44,8 +44,19 @@ def prob_over(mu: float | None, line: float | None, market: dict[str, Any]) -> f
     if mu is None or line is None:
         return None
     if market.get("dist") == "normal":
-        return _normal_sf(line, mu, market.get("sd_k", 3.0) * max(mu, 0.3) ** market.get("sd_e", 0.3))
-    return _nb_sf(line, mu, market.get("r", 10.0))
+        p = _normal_sf(line, mu, market.get("sd_k", 3.0) * max(mu, 0.3) ** market.get("sd_e", 0.3))
+    else:
+        p = _nb_sf(line, mu, market.get("r", 10.0))
+    return shrink(p, market.get("encolhimento", 1.0))
+
+
+def shrink(p: float, b: float) -> float:
+    """Recalibração (Platt sem viés): logit(p') = b × logit(p). b < 1 aproxima a
+    chance de 50%, corrigindo excesso de confiança nas pontas (ver 0012)."""
+    if b == 1.0 or p <= 0.0 or p >= 1.0:
+        return p
+    p = min(max(p, 1e-9), 1 - 1e-9)
+    return 1 / (1 + math.exp(-b * math.log(p / (1 - p))))
 
 
 def reference_line(l10: float | None) -> float | None:

@@ -5,9 +5,10 @@ import types
 
 import pytest
 
-from nbastats.metrics import betaniag as bt
-from nbastats.metrics import comparar, historico as hs, noticias
 from nbastats import ia
+from nbastats.metrics import betaniag as bt
+from nbastats.metrics import comparar, noticias
+from nbastats.metrics import historico as hs
 
 A, B, C = 1, 2, 3
 RULES = {"posicoes": {"G": "G", "C": "C"}, "dvp_recente_dias": 15}

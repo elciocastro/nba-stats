@@ -20,27 +20,28 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from nbastats import ajustes as aj
 from nbastats import auth, db
 from nbastats.config import get_settings
 from nbastats.ingest import last_refresh
-from nbastats.metrics import betaniag as bt
 from nbastats.metrics import aovivo as av
 from nbastats.metrics import apostas as ap
+from nbastats.metrics import betaniag as bt
+from nbastats.metrics import calibracao as cb
+from nbastats.metrics import cascata as cs
 from nbastats.metrics import comparar as cp
-from nbastats.metrics import noticias as nt
 from nbastats.metrics import destaques as dq
 from nbastats.metrics import favoritos as fv
 from nbastats.metrics import filtros as fl
-from nbastats.metrics import calibracao as cb
-from nbastats.metrics import cascata as cs
+from nbastats.metrics import historico as hs
+from nbastats.metrics import noticias as nt
 from nbastats.metrics import ranking as rk
 from nbastats.metrics import sistema as si
 from nbastats.metrics.comparar import _season_of
-from nbastats.metrics.matchup import dvp_table, load_matchup_rules
-from nbastats.metrics.potencial import load_rules, rank_potenciais
-from nbastats.metrics import historico as hs
 from nbastats.metrics.linhas import prob_over, save_line
+from nbastats.metrics.matchup import dvp_table, load_matchup_rules
 from nbastats.metrics.painel import day_report
+from nbastats.metrics.potencial import load_rules, rank_potenciais
 from nbastats.metrics.projecao import load_projection_params
 
 MARKETS = {
@@ -193,7 +194,9 @@ def _game(g: dict[str, Any]) -> dict[str, Any]:
 
 @app.get("/api/saude")
 def health(conn=Depends(get_conn)):
-    return {"ok": True, "modo": auth.modo(conn, _senha_unica())}
+    site = aj.load_site()  # público: o login mostra o nome e a cor do site
+    return {"ok": True, "modo": auth.modo(conn, _senha_unica()),
+            "site": {k: site.get(k) for k in ("nome", "subtitulo", "cor_destaque", "tema_padrao")}}
 
 
 class Login(BaseModel):
@@ -275,7 +278,7 @@ def meta(request: Request, conn=Depends(get_conn)):
     return {"mercados": MARKETS, "hoje": date.today().isoformat(), "atualizado": last_refresh(conn),
             "betaniag": bool(cfg.get("habilitado")), "esportes": bt.active_sports(cfg),
             "modo": auth.modo(conn, _senha_unica()), "usuario": request.state.usuario, "lavada": _lavada(),
-            "etiquetas": ap.load_bet_config().get("etiquetas") or [],
+            "etiquetas": ap.load_bet_config().get("etiquetas") or [], "site": aj.load_site(),
             "alerta": si.status_carga(conn)["alerta"]}
 
 
@@ -343,6 +346,10 @@ def jogador(player_id: int, data: str | None = None, mercado: str = "pts",
                             for k in medias}} for x in log],
         "checklist": bt.checklist(p, cfg, g.get("validacao")) if cfg else None,
         "minutos": hs.minutes_profile(log, season),
+        # playoffs ficam fora das janelas e da projeção; aparecem como janela própria
+        "playoffs": [{**{k: x.get(k) for k in LOG_FIELDS}, "adv": abbr.get(x["opp_id"], ""),
+                      "faixas": {k: hs.band(x[k], p.get("linha") if k == mercado else medias.get(k)) for k in medias}}
+                     for x in hs.player_logs(conn, [player_id], day, playoffs=True).get(player_id, [])],
     })
     return out
 
@@ -419,26 +426,26 @@ class Favorito(BaseModel):
 
 
 @app.get("/api/favoritos")
-def favorites(conn=Depends(get_conn)):
-    return fv.list_favorites(conn)
+def favorites(request: Request, conn=Depends(get_conn)):
+    return fv.list_favorites(conn, _uid(request))
 
 
 @app.post("/api/favoritos")
-def add_fav(body: Favorito, conn=Depends(get_conn)):
+def add_fav(body: Favorito, request: Request, conn=Depends(get_conn)):
     try:
-        fv.add_favorite(conn, body.tipo, body.id, body.nome)
+        fv.add_favorite(conn, body.tipo, body.id, body.nome, _uid(request))
     except ValueError as e:
         raise HTTPException(400, str(e))
-    return fv.list_favorites(conn)
+    return fv.list_favorites(conn, _uid(request))
 
 
 @app.delete("/api/favoritos/{tipo}/{entity_id}")
-def del_fav(tipo: str, entity_id: int, conn=Depends(get_conn)):
+def del_fav(tipo: str, entity_id: int, request: Request, conn=Depends(get_conn)):
     try:
-        fv.remove_favorite(conn, tipo, entity_id)
+        fv.remove_favorite(conn, tipo, entity_id, _uid(request))
     except ValueError as e:
         raise HTTPException(400, str(e))
-    return fv.list_favorites(conn)
+    return fv.list_favorites(conn, _uid(request))
 
 
 # ---------- apostas ----------
@@ -711,6 +718,61 @@ def admin_delete(user_id: int, request: Request, conn=Depends(get_conn)):
     return {"ok": True}
 
 
+class Ajuste(BaseModel):
+    arquivo: str
+    caminho: str
+    valor: Any = None
+
+
+def _bases() -> dict[str, dict[str, Any]]:
+    from nbastats.metrics.matchup import load_matchup_rules as mr
+    return {"site": {**aj.SITE_PADRAO, **_site_base()},
+            "apostas": ap.load_bet_config(ajustes=False), "alertas": _alert_cfg(False),
+            "betaniag": bt.load_betaniag(ajustes=False), "projecao": load_projection_params(ajustes=False),
+            "matchup": mr(ajustes=False), "potencial": load_rules(ajustes=False)}
+
+
+def _site_base() -> dict[str, Any]:
+    import yaml as _y
+    p = Path("config/site.yaml")
+    return (_y.safe_load(p.read_text(encoding="utf-8")) or {}) if p.exists() else {}
+
+
+def _alert_cfg(ajustes: bool = True) -> dict[str, Any]:
+    from nbastats.metrics.alertas import load_alert_config
+    return load_alert_config(ajustes=ajustes)
+
+
+def _limpar_caches() -> None:
+    from nbastats.metrics import painel
+    painel._CACHE.clear()
+
+
+@app.get("/api/admin/config")
+def admin_config():
+    return {"secoes": aj.painel(_bases())}
+
+
+@app.put("/api/admin/config")
+def admin_config_set(body: Ajuste):
+    try:
+        v = aj.definir(body.arquivo, body.caminho, body.valor)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc))
+    _limpar_caches()
+    return {"ok": True, "valor": v}
+
+
+@app.delete("/api/admin/config")
+def admin_config_reset(arquivo: str, caminho: str):
+    try:
+        aj.restaurar(arquivo, caminho)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc))
+    _limpar_caches()
+    return {"ok": True}
+
+
 @app.get("/api/admin/acessos")
 def admin_log(limite: int = Query(100, le=500), conn=Depends(get_conn)):
     return {"acessos": auth.acessos(conn, limite)}
@@ -765,11 +827,7 @@ def ao_vivo(mercado: str = "pts", alvo: str = "linha", conn=Depends(get_conn), l
         return {"data": None, "jogos": [], "destaques": []}
     day = games[0]["data"]
     report = day_report(conn, day, mercado, last_refresh(conn), None)
-    pre = {p["player_id"]: {"proj": p.get("proj"), "min_esperado": (p.get("proj_detalhe") or {}).get("minutos"),
-                            "linha": p.get("linha"), "linha_ref": p.get("linha_ref"), "media": p.get("temporada"),
-                            "l10": p.get("l10"), "jogador": p["jogador"], "time": p["time"]}
-           for g in report for p in g["jogadores"]}
-    out = av.live_report(games, pre, mercado, load_projection_params(), alvo)
+    out = av.live_report(games, av.pre_from_report(report), mercado, load_projection_params(), alvo)
     top = [{**p, "jogo": f"{g['fora']} @ {g['casa']}", "game_id": g["game_id"]}
            for g in out if g["status"] == 2 for p in g["jogadores"]
            if p["status"] in ("a caminho", "precisa acelerar")]

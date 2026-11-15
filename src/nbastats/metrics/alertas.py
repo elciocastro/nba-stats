@@ -16,13 +16,16 @@ from typing import Any
 
 import yaml
 
+from .. import ajustes as _aj
+
 DEFAULT_ALERT_CONFIG = Path("config/alertas.yaml")
 MK = {"pts": "pontos", "reb": "rebotes", "ast": "assistências", "pra": "PRA", "fg3m": "bolas de 3"}
 
 
-def load_alert_config(path: str | Path = DEFAULT_ALERT_CONFIG) -> dict[str, Any]:
+def load_alert_config(path: str | Path = DEFAULT_ALERT_CONFIG, ajustes: bool = True) -> dict[str, Any]:
     p = Path(path)
-    return (yaml.safe_load(p.read_text(encoding="utf-8")) or {}) if p.exists() else {}
+    data = (yaml.safe_load(p.read_text(encoding="utf-8")) or {}) if p.exists() else {}
+    return _aj.aplicar("alertas", data) if ajustes and p == Path(DEFAULT_ALERT_CONFIG) else data
 
 
 def _fav_ids(favs: dict[str, list[dict[str, Any]]]) -> tuple[set[int], set[int]]:
@@ -69,6 +72,35 @@ def value_alerts(opps: list[dict[str, Any]], favs: dict[str, list[dict[str, Any]
                     f"💰 {o['jogador']} ({o['time']} x {o['adversario']}): {lado} {o['linha']} "
                     f"{MK.get(o['mercado'], o['mercado'])} · chance {round(100 * o['chance'])}% · "
                     f"valor esperado {100 * o['ev']:+.1f}% · projeção {o['proj']:.1f}"))
+    return out
+
+
+def live_alerts(live: dict[str, list[dict[str, Any]]], favs: dict[str, list[dict[str, Any]]], cfg: dict[str, Any],
+                day: str) -> list[tuple[str, str]]:
+    """Durante o jogo: favorito a caminho de bater a linha (chance alta) e quem já bateu.
+
+    ``live`` = {mercado: saída de ``aovivo.live_report``}."""
+    if not cfg.get("ao_vivo", True):
+        return []
+    players, _ = _fav_ids(favs)
+    chance_min = cfg.get("ao_vivo_chance_min", 0.7)
+    out = []
+    for stat, games in live.items():
+        for g in games:
+            if g.get("status") != 2:  # só jogo em andamento
+                continue
+            placar = f"{g['fora']} {g['placar_fora']} x {g['placar_casa']} {g['casa']}"
+            for p in g["jogadores"]:
+                if (cfg.get("so_favoritos", True) and p["player_id"] not in players) or p.get("alvo") is None:
+                    continue
+                linha = f"{p['alvo']}{' (ref.)' if p.get('linha_ref') else ''} {MK.get(stat, stat)}"
+                if p["status"] == "bateu":
+                    out.append((f"vivo:{day}:{p['player_id']}:{stat}:bateu",
+                                f"✅ {p['jogador']} bateu {linha}: {p['atual']:g} ({placar})"))
+                elif p["status"] == "a caminho" and (p.get("chance") or 0) >= chance_min:
+                    out.append((f"vivo:{day}:{p['player_id']}:{stat}:caminho",
+                                f"🔥 {p['jogador']} a caminho de {linha}: {p['atual']:g} com {p['minutos']:.0f} min, "
+                                f"projeção {p['final']:.1f}, chance {round(100 * p['chance'])}% ({placar})"))
     return out
 
 

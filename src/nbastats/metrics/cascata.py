@@ -14,7 +14,8 @@ se ajustado.
 
 from __future__ import annotations
 
-from typing import Any, Iterable
+from collections.abc import Iterable
+from typing import Any
 
 MIN_JOGOS_SEM = 2   # com menos jogos sem o companheiro, a média "sem" é ruído
 

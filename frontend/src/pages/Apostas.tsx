@@ -3,7 +3,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { api2, Bet, Resumo } from "../api";
-import { ddmm } from "../components";
+import { baixarCsv, ddmm } from "../components";
 
 const MK: Record<string, string> = { pts: "Pontos", reb: "Rebotes", ast: "Assist.", pra: "PRA", pr: "PR", pa: "PA", ra: "RA",
   fg3m: "3FM", fg3a: "3FA", fg2m: "2FM", fg2a: "2FA", ftm: "FTM", fta: "FTA", stl: "Roubos", blk: "Tocos", turnover: "Turnovers" };
@@ -31,6 +31,10 @@ export default function Apostas() {
         <span className="sp" style={{ flex: 1 }} />
         {por_usuario && <div className="seg">{([[false, "Minhas"], [true, "Todas"]] as const).map(([v, l]) =>
           <button key={l} className={v === todas ? "on" : ""} onClick={() => setTodas(v)}>{l}</button>)}</div>}
+        <button className="btn" disabled={!apostas.length} onClick={() => baixarCsv("apostas", apostas.map((b) => ({ ...b, etiquetas: b.etiquetas.join(" | ") })),
+          [["date", "Data"], ["jogador", "Jogador"], ["market", "Mercado"], ["side", "Lado"], ["line", "Linha"], ["odd", "Odd"],
+           ["units", "Unidades"], ["bookmaker", "Casa"], ["prob", "Chance"], ["proj", "Projeção"], ["status", "Status"],
+           ["actual", "Real"], ["profit_units", "Lucro (u)"], ["etiquetas", "Motivos"], ["note", "Nota"], ["usuario", "Quem"]])}>⤓ CSV</button>
         <button className="btn" disabled={conferir.isPending} onClick={() => conferir.mutate()}>
           {conferir.isPending ? "Conferindo…" : conferir.data ? `Conferidas: ${Object.values(conferir.data.conferidas).reduce((a, b) => a + b, 0)}` : "Conferir resultados"}</button>
       </div>
@@ -52,9 +56,9 @@ export default function Apostas() {
           {d.curva.length >= 2 && (
             <div className="chart"><ResponsiveContainer width="100%" height={200}>
               <AreaChart data={d.curva.map((c) => ({ ...c, x: ddmm(c.data) }))} margin={{ top: 8, right: 12, left: -12, bottom: 0 }}>
-                <CartesianGrid vertical={false} stroke="#1d2632" />
-                <XAxis dataKey="x" tick={{ fill: "#8b98a9", fontSize: 11 }} /><YAxis tick={{ fill: "#8b98a9", fontSize: 11 }} />
-                <Tooltip contentStyle={{ background: "#121821", border: "1px solid #263040" }} formatter={(v) => [`${v} u`, "lucro acumulado"]} />
+                <CartesianGrid vertical={false} stroke="var(--grid)" />
+                <XAxis dataKey="x" tick={{ fill: "var(--muted)", fontSize: 11 }} /><YAxis tick={{ fill: "var(--muted)", fontSize: 11 }} />
+                <Tooltip contentStyle={{ background: "var(--panel)", border: "1px solid var(--line)", color: "var(--text)" }} formatter={(v) => [`${v} u`, "lucro acumulado"]} />
                 <Area dataKey="lucro_acumulado" stroke="#22c55e" fill="#22c55e" fillOpacity={0.12} />
               </AreaChart></ResponsiveContainer></div>
           )}
@@ -128,7 +132,7 @@ function Limites({ l }: { l: import("../api").Limites }) {
         {item("Últimos 7 dias", l.semana.unidades, l.semana.limite)}
         <div className="small muted">Derrotas seguidas: <b style={{ color: l.limite_sequencia && l.sequencia_perdas >= l.limite_sequencia ? "var(--under)" : "var(--text)" }}>{l.sequencia_perdas}</b></div>
       </div>
-      {l.avisos.length > 0 && <div className="small" style={{ color: "#fcd9b6", marginTop: 6 }}>⚠ {l.avisos.join(" ")}</div>}
+      {l.avisos.length > 0 && <div className="small" style={{ color: "var(--warn-t)", marginTop: 6 }}>⚠ {l.avisos.join(" ")}</div>}
       <div className="muted small" style={{ marginTop: 4 }}>Limites em config/apostas.yaml. Ao passar, o site pede confirmação antes de registrar.</div>
     </div>
   );

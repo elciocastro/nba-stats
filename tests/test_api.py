@@ -2,14 +2,14 @@
 
 import pytest
 from fastapi.testclient import TestClient
+from test_fase5 import base  # noqa: F401  (fixture: liga pequena com 2 temporadas)
 
 from nbastats import db
 from nbastats.api import app as api
-from test_fase5 import base  # noqa: F401  (fixture: liga pequena com 2 temporadas)
 
 
 @pytest.fixture
-def client(base, monkeypatch):
+def client(base, monkeypatch):  # noqa: F811 (fixture importada de test_fase5)
     shared = db.connect(":memory:", threads=True)
     base.commit()
     base.backup(shared)
@@ -34,6 +34,7 @@ def test_props_e_jogador(client):
     d = client.get(f"/api/jogador/{ana['player_id']}", params={"data": "2026-11-07", "mercado": "pts",
                                                               "betaniag": True}).json()
     assert len(d["log"]) == 4 and d["log"][0]["adv"] == "CCC" and d["checklist"]
+    assert d["playoffs"] == []
     assert client.get("/api/jogador/999", params={"data": "2026-11-07"}).status_code == 404
     assert client.get("/api/props", params={"mercado": "xyz"}).status_code == 400
 
@@ -112,11 +113,11 @@ def test_aposta_com_etiqueta_e_limite(client, monkeypatch):
                                                            "etiquetas": ["H2H"]})
     q = {"data": "2026-11-07", "mercado": "pts"}
     pid = client.get("/api/props", params=q).json()["jogadores"][0]["player_id"]
-    base = {**q, "player_id": pid, "lado": "over", "linha": 10.5, "odd": 1.9, "etiquetas": ["H2H"]}
-    assert client.post("/api/apostas", json={**base, "unidades": 1}).status_code == 200
-    r = client.post("/api/apostas", json={**base, "unidades": 1})
+    corpo = {**q, "player_id": pid, "lado": "over", "linha": 10.5, "odd": 1.9, "etiquetas": ["H2H"]}
+    assert client.post("/api/apostas", json={**corpo, "unidades": 1}).status_code == 200
+    r = client.post("/api/apostas", json={**corpo, "unidades": 1})
     assert r.status_code == 409 and "limite do dia" in r.json()["avisos"][0]
-    assert client.post("/api/apostas", json={**base, "unidades": 1, "confirmar": True}).status_code == 200
+    assert client.post("/api/apostas", json={**corpo, "unidades": 1, "confirmar": True}).status_code == 200
     body = client.get("/api/apostas").json()
     assert body["apostas"][0]["etiquetas"] == ["H2H"] and body["config"]["etiquetas"] == ["H2H"]
     assert "H2H" in body["desempenho"]["etiqueta"]
@@ -203,3 +204,32 @@ def test_filtros_salvos(client):
     assert client.get("/api/filtros").json()["filtros"][0]["params"]["chance_min"] == 60
     assert client.delete(f"/api/filtros/{fid}").json()["filtros"] == []
     assert client.post("/api/filtros", json={"nome": "", "params": {}}).status_code == 422
+
+
+def test_configuracoes_pela_administracao(client):
+    secoes = {s["arquivo"]: s for s in client.get("/api/admin/config").json()["secoes"]}
+    assert {"site", "apostas", "alertas", "projecao"} <= set(secoes)
+    r = client.put("/api/admin/config", json={"arquivo": "site", "caminho": "nome", "valor": "Teste"})
+    assert r.json()["valor"] == "Teste" and client.get("/api/meta").json()["site"]["nome"] == "Teste"
+    assert client.put("/api/admin/config", json={"arquivo": "site", "caminho": "cor_destaque", "valor": "x"}).status_code == 422
+    assert client.put("/api/admin/config", json={"arquivo": "projecao", "caminho": "mercados", "valor": 1}).status_code == 422
+    campo = next(c for c in client.get("/api/admin/config").json()["secoes"][0]["campos"] if c["caminho"] == "nome")
+    assert campo["mudado"] and campo["valor"] == "Teste"
+    client.delete("/api/admin/config", params={"arquivo": "site", "caminho": "nome"})
+    assert client.get("/api/meta").json()["site"]["nome"] != "Teste"
+
+
+def test_favoritos_por_usuario():
+    from nbastats import db as _db
+    from nbastats.metrics import favoritos as fv
+    c = _db.connect(":memory:"); _db.init_db(c)
+    fv.add_favorite(c, "jogador", 1, "Ana")                 # lista compartilhada (sem login)
+    assert [f["entity_id"] for f in fv.list_favorites(c, 7)["jogador"]] == [1]   # 1º acesso copia
+    fv.add_favorite(c, "jogador", 2, "Beto", user_id=7)
+    fv.remove_favorite(c, "jogador", 1, user_id=7)
+    assert [f["entity_id"] for f in fv.list_favorites(c, 7)["jogador"]] == [2]
+    assert [f["entity_id"] for f in fv.list_favorites(c)["jogador"]] == [1]      # compartilhada intacta
+    assert [f["entity_id"] for f in fv.list_favorites(c, 8)["jogador"]] == [1]   # outra pessoa
+    fv.remove_favorite(c, "jogador", 2, user_id=7)
+    assert fv.list_favorites(c, 7)["jogador"] == []                              # não recopia
+    assert {f["entity_id"] for f in fv.list_favorites(c, todos=True)["jogador"]} == {1}

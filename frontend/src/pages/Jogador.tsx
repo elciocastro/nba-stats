@@ -75,6 +75,7 @@ function Body({ d, mercado, data }: { d: Detalhe; mercado: string; data: string 
   const games = useMemo(() => {
     let pool = d.log.filter((g) => !split || SPLITS[split](g));
     if (win === "H2H") return pool.filter((g) => g.opp_id === d.adversario_id).slice(0, 20);
+    if (win === "PO") return (d.playoffs ?? []).filter((g) => !split || SPLITS[split](g));
     if (win === anterior) return pool.filter((g) => g.season === d.temporada_atual - 1).slice(0, 41);
     pool = pool.filter((g) => g.season === d.temporada_atual);
     return win === atual ? pool : pool.slice(0, Number(win.slice(1)));
@@ -117,7 +118,7 @@ function Body({ d, mercado, data }: { d: Detalhe; mercado: string; data: string 
             ))}
           </div>
           <div className="row">
-            <div className="seg">{["L5", "L10", "L20", atual, "H2H", anterior].map((w) => (
+            <div className="seg">{["L5", "L10", "L20", atual, "H2H", anterior, ...(d.playoffs?.length ? ["PO"] : [])].map((w) => (
               <button key={w} className={w === win ? "on" : ""} onClick={() => setWin(w)}>{w}</button>))}</div>
             <div className="tabs">{Object.keys(SPLITS).map((s) => (
               <button key={s} className={`tab ${s === split ? "on" : ""}`} onClick={() => setSplit(s === split ? null : s)}>{s}</button>))}</div>
@@ -126,15 +127,15 @@ function Body({ d, mercado, data }: { d: Detalhe; mercado: string; data: string 
           <div className="chart">
             <ResponsiveContainer width="100%" height={300}>
               <BarChart data={chartData} margin={{ top: 18, right: 8, left: -18, bottom: 4 }}>
-                <CartesianGrid vertical={false} stroke="#1d2632" />
-                <XAxis dataKey="x" tick={{ fill: "#8b98a9", fontSize: 10 }} angle={-45} textAnchor="end" height={58} interval={0} />
-                <YAxis tick={{ fill: "#8b98a9", fontSize: 11 }} />
-                <Tooltip contentStyle={{ background: "#121821", border: "1px solid #263040" }}
+                <CartesianGrid vertical={false} stroke="var(--grid)" />
+                <XAxis dataKey="x" tick={{ fill: "var(--muted)", fontSize: 10 }} angle={-45} textAnchor="end" height={58} interval={0} />
+                <YAxis tick={{ fill: "var(--muted)", fontSize: 11 }} />
+                <Tooltip contentStyle={{ background: "var(--panel)", border: "1px solid var(--line)", color: "var(--text)" }}
                   formatter={(v, _n, p) => [`${v} · ${p.payload.min} min · ${p.payload.res ?? ""}`, MARKETS[mercado]]} />
-                <ReferenceLine y={line} stroke="#e6edf3" strokeDasharray="5 3" />
+                <ReferenceLine y={line} stroke="var(--text)" strokeDasharray="5 3" />
                 <Bar dataKey="v" radius={[3, 3, 0, 0]} isAnimationActive>
                   {chartData.map((c, i) => <Cell key={i} fill={c.v > line ? "var(--over)" : "var(--under)"} />)}
-                  <LabelList dataKey="v" position="top" fill="#e6edf3" fontSize={11} fontWeight={700} />
+                  <LabelList dataKey="v" position="top" fill="var(--text)" fontSize={11} fontWeight={700} />
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
@@ -143,11 +144,11 @@ function Body({ d, mercado, data }: { d: Detalhe; mercado: string; data: string 
             <div className="small muted" style={{ padding: "0 8px 4px" }}>Minutos (barras) e posses usadas (linha){expMin ? ` · esperado ${expMin} min` : ""}</div>
             <ResponsiveContainer width="100%" height={180}>
               <ComposedChart data={chartData} margin={{ top: 6, right: 0, left: -18, bottom: 0 }}>
-                <CartesianGrid vertical={false} stroke="#1d2632" />
+                <CartesianGrid vertical={false} stroke="var(--grid)" />
                 <XAxis dataKey="x" hide />
-                <YAxis yAxisId="m" tick={{ fill: "#8b98a9", fontSize: 11 }} />
-                <YAxis yAxisId="u" orientation="right" tick={{ fill: "#8b98a9", fontSize: 11 }} />
-                <Tooltip contentStyle={{ background: "#121821", border: "1px solid #263040" }} />
+                <YAxis yAxisId="m" tick={{ fill: "var(--muted)", fontSize: 11 }} />
+                <YAxis yAxisId="u" orientation="right" tick={{ fill: "var(--muted)", fontSize: 11 }} />
+                <Tooltip contentStyle={{ background: "var(--panel)", border: "1px solid var(--line)", color: "var(--text)" }} />
                 <Bar yAxisId="m" dataKey="min" name="Minutos" fill="#3b82f6" opacity={0.75} radius={[2, 2, 0, 0]} />
                 {expMin && <ReferenceLine yAxisId="m" y={expMin} stroke="#93c5fd" strokeDasharray="4 3" />}
                 <Line yAxisId="u" dataKey="usadas" name="Posses usadas" stroke="#f59e0b" dot={{ r: 2 }} />
@@ -260,7 +261,7 @@ function BetForm({ d, mercado, data, line, oo, ou, po }: { d: Detalhe; mercado: 
         <button className="btn primary" disabled={m.isPending || !(oddLado > 1)} onClick={() => m.mutate()}>{m.isSuccess ? "Registrada ✓" : "Registrar"}</button>
       </div>
       {m.error && !(m.error instanceof LimiteError) && <div className="err small">{String((m.error as Error).message)}</div>}
-      {m.data?.avisos?.length ? <div className="small" style={{ color: "#fcd9b6", marginTop: 6 }}>⚠ {m.data.avisos.join(" ")}</div> : null}
+      {m.data?.avisos?.length ? <div className="small" style={{ color: "var(--warn-t)", marginTop: 6 }}>⚠ {m.data.avisos.join(" ")}</div> : null}
     </div>
   );
 }

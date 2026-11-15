@@ -12,7 +12,7 @@
 #   12:00: saude (escreve ALERTA no log se a carga falhou ou está velha)
 #   de hora em hora, 12h-22h: previsoes (foto da chance antes dos jogos)
 #   07:00: calibracao (backtest da temporada atual, para a página Calibração)
-#   a cada 15 min, 12h-23h: alertas (Telegram; só se config/alertas.yaml habilitado)
+#   a cada 15 min, 12h-02h: alertas (inclui jogos em andamento) (Telegram; só se config/alertas.yaml habilitado)
 #   17:00: resumo do dia (Telegram; idem)
 # flock evita duas cargas ao mesmo tempo. Logs em logs/cron.log.
 set -euo pipefail
@@ -32,7 +32,7 @@ linhas() {
 0 12 * * * cd $DIR && $BIN saude >> $LOG 2>&1 $TAG
 5 12-22 * * * $run previsoes >> $LOG 2>&1 $TAG
 0 7 * * * $run calibracao >> $LOG 2>&1 $TAG
-7,22,37,52 12-23 * * * $run alertas >> $LOG 2>&1 $TAG
+7,22,37,52 0-2,12-23 * * * $run alertas >> $LOG 2>&1 $TAG
 0 17 * * * $run resumo >> $LOG 2>&1 $TAG
 EOF
 }

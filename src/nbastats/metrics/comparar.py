@@ -7,7 +7,12 @@ from datetime import date, timedelta
 from typing import Any
 
 from .matchup import (
-    _player_rows, _team_games, dvp, player_form, player_groups, team_context,
+    _player_rows,
+    _team_games,
+    dvp,
+    player_form,
+    player_groups,
+    team_context,
 )
 
 COMPARE_STATS = ("pts", "reb", "ast", "pra", "fg3m")

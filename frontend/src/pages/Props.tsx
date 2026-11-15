@@ -6,7 +6,7 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { ColumnDef, createColumnHelper } from "@tanstack/react-table";
 import { api, Filtro, FiltroParams, filtros, Jogador, Jogo, LinhaIn, Potencial } from "../api";
 import { usePrefs } from "../App";
-import { Bars, DataTable, heat, num, Photo, SealBadge, Star, useFavs, useMobile } from "../components";
+import { baixarCsv, Bars, DataTable, heat, num, Photo, SealBadge, Star, useFavs, useMobile } from "../components";
 
 export const MARKETS: Record<string, string> = {
   pts: "Pontos", reb: "Rebotes", ast: "Assist.", pra: "PRA", pr: "PR", pa: "PA", ra: "RA", fg3m: "3FM",
@@ -54,7 +54,13 @@ export default function Props() {
   return (
     <>
       <div className="row" style={{ justifyContent: "space-between" }}><h1>Props</h1>
-        <span className="muted small">{q.data ? `${players.length} jogadores · ${q.data.jogos.length} jogos` : ""}</span></div>
+        <span className="row"><span className="muted small">{q.data ? `${players.length} jogadores · ${q.data.jogos.length} jogos` : ""}</span>
+          {usesPlayers && q.data && <button className="btn" onClick={() => baixarCsv(`props-${mercado}-${data}`,
+            players.map((p) => ({ ...p, chance_pct: p.chance == null ? null : Math.round(100 * p.chance), linha_tipo: p.linha_ref ? "ref" : "casa" })),
+            [["jogador", "Jogador"], ["time", "Time"], ["adversario", "Adversário"], ["linha", "Linha"], ["linha_tipo", "Tipo de linha"],
+             ["odd_over", "Odd over"], ["odd_under", "Odd under"], ["proj", "Projeção"], ["diff", "Proj − linha"], ["lado", "Lado"],
+             ["chance_pct", "Chance %"], ["ev", "Valor esperado"], ["l5", "L5"], ["l10", "L10"], ["temporada", "Temporada"],
+             ["min_l10", "Min L10"], ["dvp_rank", "DvP rank"], ["lesao", "Lesão"]])}>⤓ CSV</button>}</span></div>
       <nav className="areatabs">{Object.entries(ABAS).map(([k, v]) => (
         <a key={k} className={k === aba ? "on" : ""} onClick={() => set("aba", k)} href={`?aba=${k}&mercado=${mercado}`}
            onClickCapture={(e) => e.preventDefault()}>{v}</a>))}</nav>
@@ -316,7 +322,7 @@ function DvpTab({ mercado }: { mercado: string }) {
   const cls = (r: R, col: string) => {
     if (!col.endsWith("_rank")) return undefined;
     const v = r[col] as number;
-    return v >= 26 ? { background: "var(--h-good)", color: "#dcfce7", fontWeight: 700 } : v <= 5 ? { background: "var(--h-bad)", color: "#fee2e2", fontWeight: 700 } : undefined;
+    return v >= 26 ? { background: "var(--h-good)", color: "var(--h-good-t)", fontWeight: 700 } : v <= 5 ? { background: "var(--h-bad)", color: "var(--h-bad-t)", fontWeight: 700 } : undefined;
   };
   const rows = (q.data?.linhas ?? []).filter((r) => !soHoje || r.joga_hoje);
   return (

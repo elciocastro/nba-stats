@@ -6,8 +6,15 @@ import math
 import pytest
 
 from nbastats.metrics.linhas import (
-    attach_lines, expected_value, fair_odd, find_player, hit_rates, lines_for, prob_over,
-    reference_line, save_line,
+    attach_lines,
+    expected_value,
+    fair_odd,
+    find_player,
+    hit_rates,
+    lines_for,
+    prob_over,
+    reference_line,
+    save_line,
 )
 from nbastats.metrics.projecao import _dispersion
 
@@ -108,3 +115,11 @@ def test_barras_svg():
     svg = base64.b64decode(uri.split(",")[1]).decode()
     assert svg.count("<rect") == 3 and svg.count("#22c55e") == 2 and svg.count("#ef4444") == 1
     assert "<line" in svg and bars_svg([], 1) == ""
+
+
+def test_encolhimento_aproxima_de_50():
+    from nbastats.metrics.linhas import prob_over, shrink
+    assert shrink(0.5, 0.8) == 0.5 and shrink(0.75, 1.0) == 0.75
+    assert 0.5 < shrink(0.75, 0.8) < 0.75 and 0.25 < shrink(0.25, 0.8) < 0.5
+    m = {"dist": "normal", "sd_k": 3.0, "sd_e": 0.3}
+    assert prob_over(30, 20.5, {**m, "encolhimento": 0.8}) < prob_over(30, 20.5, m)

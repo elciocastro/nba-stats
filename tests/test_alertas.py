@@ -10,9 +10,11 @@ FAVS = {"jogador": [{"entity_id": 7}], "time": [{"entity_id": 99}], "jogo": []}
 
 
 def test_alerta_de_lesao_so_de_favoritos():
-    changes = [{"tipo": "entrou", "player_id": 7, "jogador": "Ana", "time": "AAA", "antes": None, "agora": "Out", "motivo": "joelho"},
-               {"tipo": "entrou", "player_id": 8, "jogador": "Beto", "time": "BBB", "antes": None, "agora": "Out", "motivo": None},
-               {"tipo": "piorou", "player_id": 9, "jogador": "Caio", "time": "CCC", "antes": "Probable", "agora": "Questionable", "motivo": None},
+    def ch(tipo, pid, nome, time, antes, agora, motivo=None):
+        return {"tipo": tipo, "player_id": pid, "jogador": nome, "time": time, "antes": antes, "agora": agora, "motivo": motivo}
+    changes = [ch("entrou", 7, "Ana", "AAA", None, "Out", "joelho"),
+               ch("entrou", 8, "Beto", "BBB", None, "Out"),
+               ch("piorou", 9, "Caio", "CCC", "Probable", "Questionable"),
                {"tipo": "saiu", "player_id": 7, "jogador": "Ana", "time": "AAA", "antes": "Out", "agora": None, "motivo": None}]
     out = al.injury_alerts(changes, FAVS, {"CCC": 99}, {}, "2026-11-15")
     textos = [t for _, t in out]
@@ -66,3 +68,17 @@ def test_telegram(monkeypatch):
         return Resp(b'{"ok": true}')
     assert notificar.enviar("a\n" * 3000, opener=opener) == 2 and sent[0]["chat_id"] == "c"
     assert all(len(p) <= notificar.LIMITE for p in notificar.partes("x" * 10 + "\n" + "y" * 5000))
+
+
+def test_alertas_ao_vivo():
+    jogo = {"status": 2, "fora": "AAA", "casa": "BBB", "placar_fora": 50, "placar_casa": 48}
+    p = {"player_id": 7, "jogador": "Ana", "alvo": 20.5, "linha_ref": False, "atual": 15, "minutos": 20,
+         "final": 24.0, "chance": 0.8, "status": "a caminho"}
+    live = {"pts": [{**jogo, "jogadores": [p, {**p, "player_id": 8, "jogador": "Beto"},
+                                           {**p, "status": "bateu", "atual": 21}]}],
+            "reb": [{**jogo, "status": 3, "jogadores": [p]}]}
+    out = al.live_alerts(live, FAVS, {}, "2026-11-15")
+    assert [k.split(":")[-1] for k, _ in out] == ["caminho", "bateu"]
+    assert "a caminho de 20.5 pontos" in out[0][1] and "chance 80%" in out[0][1]
+    assert al.live_alerts(live, FAVS, {"ao_vivo_chance_min": 0.9}, "x")[0][0].endswith("bateu")
+    assert al.live_alerts(live, FAVS, {"ao_vivo": False}, "x") == []

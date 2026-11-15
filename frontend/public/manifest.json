@@ -1,7 +1,7 @@
 {
-  "name": "NBA Stats",
-  "short_name": "NBA Stats",
-  "description": "Estatísticas e props da NBA",
+  "name": "Garrafão",
+  "short_name": "Garrafão",
+  "description": "Estatística da NBA para quem analisa props",
   "lang": "pt-BR",
   "start_url": "/",
   "scope": "/",

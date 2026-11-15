@@ -6,7 +6,7 @@ import { useNavigate } from "react-router-dom";
 import { ColumnDef, createColumnHelper } from "@tanstack/react-table";
 import { api3, RankRow } from "../api";
 import { usePrefs } from "../App";
-import { DataTable, Photo, useMobile } from "../components";
+import { baixarCsv, DataTable, Photo, useMobile } from "../components";
 
 const STATS: [string, string][] = [["min", "Min"], ["pts", "PTS"], ["reb", "REB"], ["ast", "AST"], ["pra", "PRA"],
   ["fg3m", "3PM"], ["stl", "ROU"], ["blk", "TOC"], ["turnover", "TOV"], ["pm", "+/−"]];
@@ -65,13 +65,7 @@ export default function Ranking() {
 
   const csv = () => {
     const keys = ["jogador", "time", "posicao", "jogos", ...STATS.flatMap(([k]) => [k, `${k}_n`]), ...SHOOT.map(([k]) => k), "fga", "fg3a", "fta"];
-    const esc = (v: unknown) => { const s = v == null ? "" : String(v); return /[",;\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
-    const body = [keys.join(","), ...shown.map((r) => keys.map((k) => esc(r[k])).join(","))].join("\n");
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(new Blob(["﻿" + body], { type: "text/csv;charset=utf-8" }));
-    a.download = `ranking-${data}${por36 ? "-por36" : ""}.csv`;
-    a.click();
-    URL.revokeObjectURL(a.href);
+    baixarCsv(`ranking-${data}${por36 ? "-por36" : ""}`, shown, keys.map((k) => [k, k] as [string, string]));
   };
 
   return (

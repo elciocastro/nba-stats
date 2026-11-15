@@ -3,12 +3,12 @@ import { headshot, Selo } from "./api";
 
 // Taxa de over -> cor (verde forte a vermelho forte). Só visual.
 export function heat(pct: number | null | undefined): { background: string; color: string } {
-  if (pct === null || pct === undefined) return { background: "transparent", color: "#5b6676" };
-  if (pct >= 70) return { background: "var(--h-strong)", color: "#fff" };
-  if (pct >= 58) return { background: "var(--h-good)", color: "#dcfce7" };
-  if (pct >= 43) return { background: "var(--h-mid)", color: "#cbd5e1" };
-  if (pct >= 31) return { background: "var(--h-bad)", color: "#fee2e2" };
-  return { background: "var(--h-worst)", color: "#fff" };
+  if (pct === null || pct === undefined) return { background: "transparent", color: "var(--h-none-t)" };
+  if (pct >= 70) return { background: "var(--h-strong)", color: "var(--h-strong-t)" };
+  if (pct >= 58) return { background: "var(--h-good)", color: "var(--h-good-t)" };
+  if (pct >= 43) return { background: "var(--h-mid)", color: "var(--h-mid-t)" };
+  if (pct >= 31) return { background: "var(--h-bad)", color: "var(--h-bad-t)" };
+  return { background: "var(--h-worst)", color: "var(--h-worst-t)" };
 }
 
 export const pct = (x: number | null | undefined) => (x === null || x === undefined ? "—" : `${Math.round(100 * x)}%`);
@@ -36,11 +36,11 @@ export function Bars({ values, line, w = 150, h = 36 }: { values: number[]; line
     <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} style={{ flexShrink: 0 }}>
       {values.map((v, i) => {
         const bh = Math.max((h * v) / top, 2);
-        const fill = line == null ? "#8b98a9" : v > line ? "var(--over)" : "var(--under)";
+        const fill = line == null ? "var(--muted)" : v > line ? "var(--over)" : "var(--under)";
         return <rect key={i} x={i * (bw + gap)} y={h - bh} width={bw} height={bh} rx={1.5} fill={fill}><title>{v}</title></rect>;
       })}
       {line != null && <line x1={0} x2={w} y1={h - (h * line) / top} y2={h - (h * line) / top}
-        stroke="#e6edf3" strokeDasharray="3,2" opacity={0.7} />}
+        stroke="var(--text)" strokeDasharray="3,2" opacity={0.7} />}
     </svg>
   );
 }
@@ -114,4 +114,16 @@ export function useMobile(px = 760) {
     return () => mq.removeEventListener("change", f);
   }, [px]);
   return m;
+}
+
+/** Baixa uma tabela como CSV (Excel abre direto: BOM UTF-8 e separador vírgula). */
+export function baixarCsv(nome: string, linhas: Record<string, unknown>[], colunas: [string, string][]) {
+  const esc = (v: unknown) => { const t = v == null ? "" : Array.isArray(v) ? v.join(" | ") : String(v);
+    return /[",;\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t; };
+  const body = [colunas.map(([, r]) => esc(r)).join(","), ...linhas.map((l) => colunas.map(([k]) => esc(l[k])).join(","))].join("\n");
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob(["\ufeff" + body], { type: "text/csv;charset=utf-8" }));
+  a.download = nome.endsWith(".csv") ? nome : `${nome}.csv`;
+  a.click();
+  URL.revokeObjectURL(a.href);
 }

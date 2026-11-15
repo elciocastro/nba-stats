@@ -22,6 +22,7 @@ def connect(path: str = "data/nba.db", threads: bool = False) -> sqlite3.Connect
 COLUMNS = [
     ("bets", "tags", "TEXT"),          # etiquetas/motivos da aposta, separadas por vírgula
     ("bets", "user_id", "INTEGER"),    # quem registrou (NULL = antes dos usuários)
+    ("favorites", "user_id", "INTEGER"),  # dono (NULL = lista compartilhada, sem login)
 ]
 
 

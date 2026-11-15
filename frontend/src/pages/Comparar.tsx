@@ -59,9 +59,9 @@ function Jogadores() {
                 <BarChart data={Array.from({ length: 10 }, (_, i) => ({
                   i: i + 1, [pa.jogador]: pa.valores.slice(-10)[i]?.valor, [pb.jogador]: pb.valores.slice(-10)[i]?.valor }))}
                   margin={{ top: 8, right: 8, left: -18, bottom: 0 }}>
-                  <CartesianGrid vertical={false} stroke="#1d2632" />
-                  <XAxis dataKey="i" tick={{ fill: "#8b98a9", fontSize: 11 }} /><YAxis tick={{ fill: "#8b98a9", fontSize: 11 }} />
-                  <Tooltip contentStyle={{ background: "#121821", border: "1px solid #263040" }} />
+                  <CartesianGrid vertical={false} stroke="var(--grid)" />
+                  <XAxis dataKey="i" tick={{ fill: "var(--muted)", fontSize: 11 }} /><YAxis tick={{ fill: "var(--muted)", fontSize: 11 }} />
+                  <Tooltip contentStyle={{ background: "var(--panel)", border: "1px solid var(--line)", color: "var(--text)" }} />
                   <Legend />
                   {pa.linha != null && <ReferenceLine y={pa.linha} stroke="#3b82f6" strokeDasharray="4 3" />}
                   {pb.linha != null && <ReferenceLine y={pb.linha} stroke="#f59e0b" strokeDasharray="4 3" />}
@@ -149,7 +149,7 @@ function Times() {
               <thead><tr><th>Defesa por posição</th><th>{q.data.a.time} cede</th><th>rank</th><th>15d</th><th>{q.data.b.time} cede</th><th>rank</th><th>15d</th></tr></thead>
               <tbody>{q.data.a.dvp.filter((d) => d.stat === stat).map((da) => {
                 const db = q.data!.b.dvp.find((d) => d.stat === stat && d.grupo === da.grupo)!;
-                const rk = (r: number | null) => r == null ? undefined : r >= 26 ? { background: "var(--h-good)", color: "#dcfce7" } : r <= 5 ? { background: "var(--h-bad)", color: "#fee2e2" } : undefined;
+                const rk = (r: number | null) => r == null ? undefined : r >= 26 ? { background: "var(--h-good)", color: "var(--h-good-t)" } : r <= 5 ? { background: "var(--h-bad)", color: "var(--h-bad-t)" } : undefined;
                 return <tr key={da.grupo}><td>{da.grupo}</td>
                   <td>{num(da.media)}</td><td style={rk(da.rank)}>{da.rank}º</td><td style={rk(da.rank_rec)}>{da.rank_rec}º</td>
                   <td>{num(db.media)}</td><td style={rk(db.rank)}>{db.rank}º</td><td style={rk(db.rank_rec)}>{db.rank_rec}º</td></tr>;

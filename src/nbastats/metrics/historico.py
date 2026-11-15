@@ -15,9 +15,10 @@ H2H tem poucos jogos (1 a 4 por temporada): é contexto, não critério (0008).
 from __future__ import annotations
 
 import sqlite3
+from collections.abc import Iterable
 from datetime import date
 from statistics import mean
-from typing import Any, Iterable
+from typing import Any
 
 from .matchup import _COLS, MATCHUP_STATS, _derive
 
@@ -33,9 +34,10 @@ def season_label(season: int) -> str:
 
 
 def player_logs(conn: sqlite3.Connection, player_ids: Iterable[int], before: str,
-                seasons: Iterable[int] | None = None) -> dict[int, list[dict[str, Any]]]:
+                seasons: Iterable[int] | None = None, playoffs: bool = False) -> dict[int, list[dict[str, Any]]]:
     """Jogos de cada jogador (mais recente primeiro) antes da data, em todas as
-    temporadas da base (ou só nas pedidas), sem playoffs.
+    temporadas da base (ou só nas pedidas), sem playoffs (``playoffs=True``:
+    só os jogos de playoffs).
 
     Cada jogo traz adversário, mando, resultado (V/D), margem, dias de
     descanso e todos os mercados (MATCHUP_STATS).
@@ -62,7 +64,7 @@ def player_logs(conn: sqlite3.Connection, player_ids: Iterable[int], before: str
         FROM player_game_stats s
         JOIN games g ON g.id = s.game_id
         WHERE s.player_id IN ({marks}) AND g.date < ? AND s.minutes > 0
-              AND g.postseason = 0{season_sql}
+              AND g.postseason = {1 if playoffs else 0}{season_sql}
         ORDER BY g.date DESC, g.id DESC
     """
     out: dict[int, list[dict[str, Any]]] = {pid: [] for pid in ids}

@@ -22,6 +22,7 @@ from typing import Any
 
 import yaml
 
+from .. import ajustes as _aj
 from .matchup import _COLS, _derive
 
 DEFAULT_BET_CONFIG = Path("config/apostas.yaml")
@@ -29,9 +30,10 @@ SIDES = ("over", "under")
 STATUSES = ("pendente", "ganha", "perdida", "devolvida", "anulada")
 
 
-def load_bet_config(path: str | Path = DEFAULT_BET_CONFIG) -> dict[str, Any]:
+def load_bet_config(path: str | Path = DEFAULT_BET_CONFIG, ajustes: bool = True) -> dict[str, Any]:
     p = Path(path)
-    return (yaml.safe_load(p.read_text(encoding="utf-8")) or {}) if p.exists() else {}
+    data = (yaml.safe_load(p.read_text(encoding="utf-8")) or {}) if p.exists() else {}
+    return _aj.aplicar("apostas", data) if ajustes and p == Path(DEFAULT_BET_CONFIG) else data
 
 
 def _now() -> str:
@@ -215,7 +217,8 @@ def limits(conn: sqlite3.Connection, day: str, config: dict[str, Any] | None = N
            user_id: int | None = None, extra_units: float = 0.0) -> dict[str, Any]:
     """Unidades no dia e na semana (dia e os 6 anteriores) contra os limites e a
     sequência atual de derrotas. ``extra_units`` simula uma aposta nova."""
-    from datetime import date as _date, timedelta
+    from datetime import date as _date
+    from datetime import timedelta
     cfg = ((config if config is not None else load_bet_config()).get("jogo_responsavel") or {})
     d = _date.fromisoformat(day)
     week0 = (d - timedelta(days=6)).isoformat()

@@ -1,6 +1,6 @@
-from .balldontlie import BallDontLie
 from datetime import date
 
+from .balldontlie import BallDontLie
 from .base import DataSource, InjurySource
 from .injury_report import NbaInjuryReport
 from .nba_api_source import NbaApiSource, season_of

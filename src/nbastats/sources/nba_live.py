@@ -7,7 +7,8 @@ funções de busca são injetáveis para os testes usarem respostas gravadas.
 from __future__ import annotations
 
 import re
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 Fetch = Callable[[], dict[str, Any]]
 FetchBox = Callable[[str], dict[str, Any]]

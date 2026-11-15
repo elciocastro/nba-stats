@@ -15,8 +15,9 @@ assim a ingestão não sabe de qual fonte os dados vieram.
 from __future__ import annotations
 
 import time
+from collections.abc import Callable, Iterator
 from datetime import date
-from typing import Any, Callable, Iterator
+from typing import Any
 
 SEASON_TYPES = (("Regular Season", False), ("Playoffs", True))
 
