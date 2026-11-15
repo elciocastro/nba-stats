@@ -234,7 +234,15 @@ export type Sistema = { carga: { ultima_ok: string | null; horas: number | null;
   cargas: { kind: string; started_at: string; finished_at: string | null; status: string; games: number; stats: number; error: string | null }[];
   banco_mb: number | null; alertas: { habilitado: boolean; telegram: boolean } };
 
+export type ValorBase = { player_id: number; jogador: string; time: string; adversario: string; mercado: string;
+  linha: number | null; linha_ref: boolean; proj: number | null; lesao: string | null; lado: "over" | "under";
+  chance: number; odd_justa: number | null };
+export type ValorComOdd = ValorBase & { odd: number; implicita: number; edge: number; ev: number; chance_mercado: number | null };
+export type ValorSemOdd = ValorBase & { odd_minima: number | null };
+export type Valor = { data: string; edge_minimo: number; avaliadas: number; com_odd: ValorComOdd[]; sem_odd: ValorSemOdd[] };
+
 export const api3 = {
+  valor: (data: string) => call<Valor>(`/api/valor?${qs({ data })}`),
   ranking: (data: string, janela: number, min_jogos: number, por36: boolean, playoffs: boolean, sem_lavadas: boolean) =>
     call<{ temporada: number; janela: number; lavada: number; jogadores: RankRow[] }>(`/api/ranking?${qs({ data, janela, min_jogos, por36, playoffs, sem_lavadas })}`),
   jogos: (data: string) => call<{ data: string; pedida: string; jogos: JogoDia[] }>(`/api/jogos?${qs({ data })}`),

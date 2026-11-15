@@ -39,6 +39,7 @@ from nbastats.metrics import liga as lg
 from nbastats.metrics import noticias as nt
 from nbastats.metrics import ranking as rk
 from nbastats.metrics import sistema as si
+from nbastats.metrics import valor as vl
 from nbastats.metrics.comparar import _season_of
 from nbastats.metrics.linhas import prob_over, save_line
 from nbastats.metrics.matchup import dvp_table, load_matchup_rules
@@ -344,6 +345,17 @@ def inicio(data: str | None = None, betaniag: bool | None = None, conn=Depends(g
             o["valores"] = [g[o["mercado"]] for g in reversed(o.pop("historico")[:10])]
     return {"data": day, "jogos": dq.game_cards(reports, cfg, mins), "oportunidades": opp,
             "em_alta": dq.rising(reports["pra"])}
+
+
+@app.get("/api/valor")
+def valor(data: str | None = None, conn=Depends(get_conn)):
+    """Props com edge: nossa chance acima da chance implícita na odd (metrics/valor.py)."""
+    day = _day(data)
+    version = last_refresh(conn)
+    reports = {s: day_report(conn, day, s, version, None) for s in dq.HOME_MARKETS}
+    mins = (bt.load_betaniag().get("destaques") or {}).get("min_media") or dq.MIN_MEDIA
+    out = vl.value_bets(reports, ap.load_bet_config().get("valor"), mins)
+    return {"data": day, **out}
 
 
 @app.get("/api/jogador/{player_id}")

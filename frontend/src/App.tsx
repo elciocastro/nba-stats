@@ -10,6 +10,7 @@ const Apostas = lazy(() => import("./pages/Apostas"));
 const Comparar = lazy(() => import("./pages/Comparar"));
 const Lesoes = lazy(() => import("./pages/Lesoes"));
 const Ranking = lazy(() => import("./pages/Ranking"));
+const Valor = lazy(() => import("./pages/Valor"));
 const Jogos = lazy(() => import("./pages/Jogos"));
 const Admin = lazy(() => import("./pages/Admin"));
 const Calibracao = lazy(() => import("./pages/Calibracao"));
@@ -131,6 +132,7 @@ function Shell() {
         <nav className="nav">
           <NavLink to="/" end>Início</NavLink>
           <NavLink to="/props">Props</NavLink>
+          <NavLink to="/valor">Valor</NavLink>
           <NavLink to="/lesoes">Lesões</NavLink>
           <NavLink to="/aovivo">Ao Vivo</NavLink>
           <NavLink to="/apostas">Apostas</NavLink>
@@ -153,6 +155,7 @@ function Shell() {
           <Route path="/" element={<Inicio />} />
           <Route path="/jogador/:id" element={<JogadorPage />} />
           <Route path="/props" element={<Props />} />
+          <Route path="/valor" element={<Valor />} />
           <Route path="/aovivo" element={<AoVivo />} />
           <Route path="/apostas" element={<Apostas />} />
           <Route path="/comparar" element={<Comparar />} />
@@ -234,7 +237,8 @@ function MaisLink() {
 }
 
 function Mais({ meta }: { meta?: Meta }) {
-  const items = [["/lesoes", "✚", "Lesões", "Injury report, efeito cascata e quem pode voltar"],
+  const items = [["/valor", "◆", "Valor", "Props com edge: nossa chance acima da que a odd paga"],
+                 ["/lesoes", "✚", "Lesões", "Injury report, efeito cascata e quem pode voltar"],
                  ["/comparar", "⇄", "Comparar", "Jogador × jogador, time × time e tendências"],
                  ["/ranking", "≡", "Ranking", "Médias, últimos jogos, por 36 min e arremesso"],
                  ["/jogos", "▦", "Jogos", "Box score completo de cada jogo"],
