@@ -413,3 +413,36 @@ table.t tr { transition: background-color var(--m-out) var(--ease); }
   *, *::before, *::after { transition-duration: 0ms !important; animation-duration: 0ms !important; animation-iteration-count: 1 !important; }
   .main > .pagina { animation: none; }
 }
+
+/* painel que recolhe (no celular vem fechado) */
+.recolhe > summary { list-style: none; cursor: pointer; display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+.recolhe > summary::-webkit-details-marker { display: none; }
+.recolhe > .corpo { margin-top: 8px; }
+@media (max-width: 760px) {
+  .recolhe > summary { min-height: 28px; }
+  .recolhe > summary::after { content: "▾"; margin-left: auto; color: var(--muted); transition: transform var(--m-panel) var(--ease); }
+  .recolhe[open] > summary::after { transform: rotate(180deg); }
+}
+
+/* página do jogador no celular: as colunas viram uma lista só, na ordem de uso */
+@media (max-width: 760px) {
+  .split.jog { display: flex; flex-direction: column; gap: 12px; align-items: stretch; }
+  .split.jog > .col { display: contents !important; } /* vence o display:flex escrito no elemento */
+  .split.jog .o-resumo { order: 1; } .split.jog .o-linha { order: 2; } .split.jog .o-mins { order: 3; }
+  .split.jog .o-heat { order: 4; } .split.jog .o-janelas { order: 5; } .split.jog .o-conta { order: 6; }
+  .split.jog .o-graf { order: 7; } .split.jog .o-min { order: 8; } .split.jog .o-tab { order: 9; }
+  .split.jog .o-extra { order: 10; }
+  .split.jog .o-janelas { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  .split.jog .o-janelas .seg { flex-shrink: 0; }
+  .heat { gap: 5px; grid-template-columns: repeat(3, minmax(0, 1fr)); } .heat > div { padding: 5px 2px; } .heat .v { font-size: .98rem; } .heat .s { font-size: .6rem; }
+  .hero { gap: 12px; margin: 4px 0 10px; } .hero .ph.big { width: 64px; height: 64px; } .hero .n { font-size: 1.3rem; }
+  .split.jog .o-linha .row { gap: 8px; } .split.jog .o-linha .field input { width: 76px; }
+  .split.jog .kpis { grid-template-columns: repeat(3, 1fr); } .split.jog .kpi .v { font-size: 1.2rem; }
+}
+@media (max-width: 760px) {
+  /* sem as colunas, cada bloco precisa caber na tela (a tabela rola por dentro) */
+  .split.jog > .col > * { min-width: 0; max-width: 100%; }
+  .split.jog .o-janelas > .tabs { min-width: 0; }
+  .hero { flex-wrap: nowrap; } .hero > div { min-width: 0; }
+  .main { overflow-x: clip; }
+}

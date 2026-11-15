@@ -217,7 +217,9 @@ export type RankRow = { player_id: number; jogador: string; posicao: string | nu
   fg_pct: number | null; fg3_pct: number | null; ft_pct: number | null; ts_pct: number | null; fga: number; fg3a: number; fta: number;
   [k: string]: number | string | null };
 export type JogoDia = { id: number; date: string; status: string | null; placar_casa: number | null; placar_fora: number | null;
-  casa: string; fora: string; casa_id: number; fora_id: number; tem_box: boolean };
+  casa: string; fora: string; casa_id: number; fora_id: number; tem_box: boolean; ao_vivo?: boolean };
+export type JogoTime = { id: number; data: string; em_casa: boolean; adversario: string; pro: number | null; contra: number | null;
+  status: string | null; playoffs: boolean; resultado: "V" | "D" | null; tem_box: boolean };
 export type BoxRow = { player_id: number; jogador: string; posicao: string | null; min: number; pts: number; reb: number; ast: number;
   stl: number; blk: number; turnover: number; pf: number; fgm: number; fga: number; fg3m: number; fg3a: number; ftm: number; fta: number;
   oreb: number; dreb: number; plus_minus: number | null; pra: number };
@@ -236,7 +238,10 @@ export const api3 = {
   ranking: (data: string, janela: number, min_jogos: number, por36: boolean, playoffs: boolean, sem_lavadas: boolean) =>
     call<{ temporada: number; janela: number; lavada: number; jogadores: RankRow[] }>(`/api/ranking?${qs({ data, janela, min_jogos, por36, playoffs, sem_lavadas })}`),
   jogos: (data: string) => call<{ data: string; pedida: string; jogos: JogoDia[] }>(`/api/jogos?${qs({ data })}`),
-  jogo: (id: number) => call<{ id: number; data: string; status: string | null; playoffs: boolean; times: BoxTime[] }>(`/api/jogo/${id}`),
+  jogo: (id: number) => call<{ id: number; data: string; status: string | null; playoffs: boolean; times: BoxTime[];
+    ao_vivo?: boolean; periodo?: number }>(`/api/jogo/${id}`),
+  jogosDoTime: (id: number, data: string) => call<{ time: string; nome: string; temporada: number; v: number; d: number;
+    jogos: JogoTime[] }>(`/api/jogos/time/${id}?${qs({ data })}`),
   usuarios: () => call<{ usuarios: UsuarioAdm[]; papeis: string[] }>("/api/admin/usuarios"),
   criarUsuario: (b: { login: string; nome?: string; papel: string; expira_em?: string | null }) =>
     call<{ id: number; senha_provisoria: string }>("/api/admin/usuarios", { method: "POST", body: JSON.stringify(b) }),

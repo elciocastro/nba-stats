@@ -8,7 +8,7 @@ import {
 import { createColumnHelper, flexRender, getCoreRowModel, getSortedRowModel, SortingState, useReactTable } from "@tanstack/react-table";
 import { api, api2, Detalhe, JogoLog, LimiteError } from "../api";
 import { usePrefs, Esqueleto } from "../App";
-import { ddmm, heat, num, pct, Photo, SealBadge, Star, useFavs } from "../components";
+import { ddmm, heat, num, pct, Photo, Recolhe, SealBadge, Star, useCelular, useFavs } from "../components";
 
 const MARKETS: Record<string, string> = {
   pts: "Pontos", reb: "Rebotes", ast: "Assist.", pra: "PRA", pr: "PR", pa: "PA", ra: "RA", fg3m: "3FM",
@@ -74,6 +74,7 @@ function SemJogo({ d, data }: { d: Detalhe; data: string }) {
 function Body({ d, mercado, data }: { d: Detalhe; mercado: string; data: string }) {
   const fav = useFavs();
   const sj = !!d.sem_jogo;
+  const cel = useCelular();
   const { atual, anterior } = d.rotulos;
   const [win, setWin] = useState("L10");
   const [split, setSplit] = useState<string | null>(null);
@@ -131,9 +132,9 @@ function Body({ d, mercado, data }: { d: Detalhe; mercado: string; data: string 
         </div>
       </div>
 
-      <div className="split">
-        <div style={{ display: "flex", flexDirection: "column", gap: 14, minWidth: 0 }}>
-          <div className="heat">
+      <div className="split jog">
+        <div className="col" style={{ display: "flex", flexDirection: "column", gap: 14, minWidth: 0 }}>
+          <div className="heat o-heat">
             {Object.entries(d.janelas).map(([k, w]) => (
               <div key={k} style={heat(w.pct)} onClick={() => setWin(k)}>
                 <div className="l">{k}</div><div className="v">{w.pct == null ? "—" : `${w.pct}%`}</div>
@@ -141,18 +142,18 @@ function Body({ d, mercado, data }: { d: Detalhe; mercado: string; data: string 
               </div>
             ))}
           </div>
-          <div className="row">
+          <div className="row o-janelas">
             <div className="seg">{["L5", "L10", "L20", atual, "H2H", anterior, ...(d.playoffs?.length ? ["PO"] : [])].map((w) => (
               <button key={w} className={w === win ? "on" : ""} onClick={() => setWin(w)}>{w}</button>))}</div>
             <div className="tabs">{Object.keys(SPLITS).map((s) => (
               <button key={s} className={`tab ${s === split ? "on" : ""}`} onClick={() => setSplit(s === split ? null : s)}>{s}</button>))}</div>
           </div>
-          <div><b>{over}/{games.length} acima de {line}</b> <span className="muted">· média {avg.toFixed(1)}{split ? ` · ${split}` : ""}</span></div>
-          <div className="chart">
-            <ResponsiveContainer width="100%" height={300}>
+          <div className="o-conta"><b>{over}/{games.length} acima de {line}</b> <span className="muted">· média {avg.toFixed(1)}{split ? ` · ${split}` : ""}</span></div>
+          <div className="chart o-graf">
+            <ResponsiveContainer width="100%" height={cel ? 220 : 300}>
               <BarChart data={chartData} margin={{ top: 18, right: 8, left: -18, bottom: 4 }}>
                 <CartesianGrid vertical={false} stroke="var(--grid)" />
-                <XAxis dataKey="x" tick={{ fill: "var(--muted)", fontSize: 10 }} angle={-45} textAnchor="end" height={58} interval={0} />
+                <XAxis dataKey="x" tick={{ fill: "var(--muted)", fontSize: 10 }} angle={-45} textAnchor="end" height={58} interval={cel ? "preserveStartEnd" : 0} />
                 <YAxis tick={{ fill: "var(--muted)", fontSize: 11 }} />
                 <Tooltip contentStyle={{ background: "var(--panel)", border: "1px solid var(--line)", color: "var(--text)" }}
                   formatter={(v, _n, p) => [`${v} · ${p.payload.min} min · ${p.payload.res ?? ""}`, MARKETS[mercado]]} />
@@ -164,9 +165,9 @@ function Body({ d, mercado, data }: { d: Detalhe; mercado: string; data: string 
               </BarChart>
             </ResponsiveContainer>
           </div>
-          <div className="chart">
+          <div className="chart o-min">
             <div className="small muted" style={{ padding: "0 8px 4px" }}>Minutos (barras) e posses usadas (linha){expMin ? ` · esperado ${expMin} min` : ""}</div>
-            <ResponsiveContainer width="100%" height={180}>
+            <ResponsiveContainer width="100%" height={cel ? 140 : 180}>
               <ComposedChart data={chartData} margin={{ top: 6, right: 0, left: -18, bottom: 0 }}>
                 <CartesianGrid vertical={false} stroke="var(--grid)" />
                 <XAxis dataKey="x" hide />
@@ -179,20 +180,20 @@ function Body({ d, mercado, data }: { d: Detalhe; mercado: string; data: string 
               </ComposedChart>
             </ResponsiveContainer>
           </div>
-          <h2 style={{ margin: "4px 0 0" }}>Jogo a jogo</h2>
-          <LogTable rows={games} d={d} mercado={mercado} />
-          <p className="muted small" style={{ margin: 0 }}>Verde = atingiu a média dele na temporada (no {MARKETS[mercado]}, a linha); âmbar = 80%; vermelho = abaixo. Clique no cabeçalho para ordenar.</p>
+          <h2 className="o-tab" style={{ margin: "4px 0 0" }}>Jogo a jogo</h2>
+          <div className="o-tab"><LogTable rows={games} d={d} mercado={mercado} /></div>
+          <p className="muted small o-tab" style={{ margin: 0 }}>Verde = atingiu a média dele na temporada (no {MARKETS[mercado]}, a linha); âmbar = 80%; vermelho = abaixo. Clique no cabeçalho para ordenar.</p>
         </div>
 
-        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          {sj && <SemJogo d={d} data={data} />}
+        <div className="col" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          {sj && <div className="o-resumo"><SemJogo d={d} data={data} /></div>}
           {sj && (
-            <div className="kpis">
+            <div className="kpis o-resumo">
               {([["pts", "Pontos"], ["reb", "Rebotes"], ["ast", "Assist."], ["pra", "PRA"], ["minutes", "Minutos"]] as const).map(([k, l]) =>
                 <div key={k} className="kpi"><div className="l">{l}</div><div className="v">{num(d.medias[k])}</div><div className="s">{atual}</div></div>)}
             </div>)}
           {sj ? (
-            <div className="panel">
+            <div className="panel o-linha">
               <b>Linha para comparar</b>
               <div className="row" style={{ marginTop: 8, alignItems: "flex-end" }}>
                 <label className="field">Linha<input className="input" type="number" step={0.5} value={line} onChange={(e) => setLine(Number(e.target.value))} /></label>
@@ -200,7 +201,7 @@ function Body({ d, mercado, data }: { d: Detalhe; mercado: string; data: string 
               </div>
             </div>
           ) : <>
-          <div className="panel">
+          <div className="panel o-linha">
             <b>Linha da casa</b>
             <div className="row" style={{ marginTop: 8, alignItems: "flex-end" }}>
               <label className="field">Linha<input className="input" type="number" step={0.5} value={line} onChange={(e) => setLine(Number(e.target.value))} /></label>
@@ -211,12 +212,12 @@ function Body({ d, mercado, data }: { d: Detalhe; mercado: string; data: string 
             {d.linha_ref && <div className="muted small" style={{ marginTop: 6 }}>Linha "ref" = L10 arredondado (não é da casa).</div>}
           </div>
           {expMin && (
-            <div className="panel">
+            <div className="panel o-mins">
               <div className="row" style={{ justifyContent: "space-between" }}><b>E se jogar {mins} minutos?</b><span className="muted small">esperado {expMin}</span></div>
               <input type="range" min={10} max={44} value={mins} onChange={(e) => setMins(Number(e.target.value))} />
             </div>
           )}
-          <div className="kpis">
+          <div className="kpis o-resumo">
             <div className="kpi"><div className="l">Projeção</div><div className={`v ${proj != null && proj > line ? "over" : "under"}`}>{num(proj)}</div>
               <div className="s">{proj != null ? `${(proj - line > 0 ? "+" : "")}${(proj - line).toFixed(1)} vs linha` : ""}</div></div>
             <div className="kpi"><div className="l">Over</div><div className="v">{pct(po)}</div><div className="s">odd justa {po ? (1 / po).toFixed(2) : "—"}</div></div>
@@ -224,33 +225,33 @@ function Body({ d, mercado, data }: { d: Detalhe; mercado: string; data: string 
             {ev && <div className="kpi"><div className="l">Valor esp.</div><div className={`v ${ev[1] > 0 ? "over" : "under"}`}>{ev[1] > 0 ? "+" : ""}{(100 * ev[1]).toFixed(1)}%</div><div className="s">no {ev[0]}</div></div>}
             <div className="kpi"><div className="l">DvP</div><div className={`v ${(d.dvp_rank ?? 15) >= 21 ? "over" : (d.dvp_rank ?? 15) <= 10 ? "under" : ""}`}>{d.dvp_rank ?? "—"}º</div><div className="s">30 = cede mais</div></div>
           </div>
-          <BetForm d={d} mercado={mercado} data={data} line={line} oo={oo} ou={ou} po={po} />
+          <div className="o-extra"><BetForm d={d} mercado={mercado} data={data} line={line} oo={oo} ou={ou} po={po} /></div>
           {d.checklist && (
-            <div className="panel"><b>Checklist BetânIAG</b>
-              <table className="ck" style={{ marginTop: 6 }}><tbody>
+            <Recolhe className="o-extra" titulo="Checklist BetânIAG">
+              <table className="ck"><tbody>
                 {d.checklist.map((c) => (
                   <tr key={c.item}><td>{c.ok ? <span className="over">✓</span> : c.ok === false ? <span className="under">✗</span> : <span className="muted">•</span>}</td>
                     <td>{c.item}</td><td className="v">{c.valor}</td><td className="n">{c.nota}</td></tr>))}
               </tbody></table>
-            </div>
+            </Recolhe>
           )}
-          {d.jogo && <div className="panel">
-            <b>Desfalques</b> <span className="muted small">{d.jogo.injury_report ? `injury report ${d.jogo.injury_report.slice(11)} ET` : "fora no último jogo"}</span>
-            <div className="small" style={{ marginTop: 6 }}>{d.jogo.fora}: {d.jogo.desfalques?.fora.join(", ") || "—"}<br />{d.jogo.casa}: {d.jogo.desfalques?.casa.join(", ") || "—"}</div>
+          {d.jogo && <Recolhe className="o-extra" titulo="Desfalques"
+            extra={d.jogo.injury_report ? `injury report ${d.jogo.injury_report.slice(11)} ET` : "fora no último jogo"}>
+            <div className="small">{d.jogo.fora}: {d.jogo.desfalques?.fora.join(", ") || "—"}<br />{d.jogo.casa}: {d.jogo.desfalques?.casa.join(", ") || "—"}</div>
             {d.com_sem?.map((c) => <div key={c.companheiro} className="small" style={{ marginTop: 6 }}>Com <b>{c.companheiro}</b>: {c.com ?? "—"} em {c.jogos_com} j · sem: {c.sem ?? "—"} em {c.jogos_sem} j</div>)}
             {d.jogo.margem_esperada != null && <div className="muted small" style={{ marginTop: 6 }}>
               Margem esperada: {d.jogo.margem_esperada >= 0 ? d.jogo.casa : d.jogo.fora} por {Math.abs(d.jogo.margem_esperada).toFixed(1)} · blowout {Math.round(100 * (d.jogo.risco_blowout ?? 0))}%</div>}
-          </div>}
+          </Recolhe>}
           </>}
           {d.proj_detalhe && (
-            <div className="panel small"><b>De onde vem a projeção</b>
-              <div style={{ marginTop: 6, lineHeight: 1.7 }}>
+            <Recolhe className="o-extra small" titulo="De onde vem a projeção">
+              <div style={{ lineHeight: 1.7 }}>
                 Base {d.proj_detalhe.base} = taxa por minuto × {d.proj_detalhe.minutos} min<br />
                 Defesa (DvP {d.dvp_rank ?? "—"}º): ×{d.proj_detalhe.f_dvp} · Ritmo: ×{d.proj_detalhe.f_ritmo}<br />
                 Ajuste calibrado ({Math.round(100 * d.proj_detalhe.ausencia)}% do time fora): ×{d.proj_detalhe.f_ajuste}
                 {d.proj_detalhe.erro_tipico && <><br /><span className="muted">Erro típico ±{d.proj_detalhe.erro_tipico}</span></>}
               </div>
-            </div>
+            </Recolhe>
           )}
         </div>
       </div>
@@ -284,8 +285,8 @@ function BetForm({ d, mercado, data, line, oo, ou, po }: { d: Detalhe; mercado: 
   const chance = po == null ? null : lado === "over" ? po : 1 - po;
   const toggle = (t: string) => setTags(tags.includes(t) ? tags.filter((x) => x !== t) : [...tags, t]);
   return (
-    <div className="panel"><b>Registrar aposta</b> <span className="muted small">{lado} {line} · chance {chance == null ? "—" : `${Math.round(100 * chance)}%`}</span>
-      <div className="row" style={{ marginTop: 8, alignItems: "flex-end" }}>
+    <Recolhe titulo="Registrar aposta" extra={`${lado} ${line} · chance ${chance == null ? "—" : `${Math.round(100 * chance)}%`}`}>
+      <div className="row" style={{ alignItems: "flex-end" }}>
         <div className="seg">{(["over", "under"] as const).map((l) => <button key={l} className={l === lado ? "on" : ""} onClick={() => { setLado(l); setOdd(0); }}>{l === "over" ? "Over" : "Under"}</button>)}</div>
         <div className="seg">{[0.5, 1, 2].map((u) => <button key={u} className={u === un ? "on" : ""} onClick={() => setUn(u)}>{u}u</button>)}</div>
       </div>
@@ -302,7 +303,7 @@ function BetForm({ d, mercado, data, line, oo, ou, po }: { d: Detalhe; mercado: 
       </div>
       {m.error && !(m.error instanceof LimiteError) && <div className="err small">{String((m.error as Error).message)}</div>}
       {m.data?.avisos?.length ? <div className="small" style={{ color: "var(--warn-t)", marginTop: 6 }}>⚠ {m.data.avisos.join(" ")}</div> : null}
-    </div>
+    </Recolhe>
   );
 }
 

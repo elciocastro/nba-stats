@@ -19,6 +19,7 @@ from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+from starlette.concurrency import run_in_threadpool
 
 from nbastats import ajustes as aj
 from nbastats import auth, db
@@ -93,6 +94,22 @@ def get_conn():
         conn.close()
 
 
+_LIVE: dict[str, Any] = {"t": 0.0, "dados": None}
+LIVE_TTL = 20  # segundos: o placar da NBA atualiza a cada ~10-20 s
+
+
+def get_live():
+    from nbastats.sources.nba_live import NbaLiveSource
+    return NbaLiveSource()
+
+
+def _live_games(source) -> list[dict[str, Any]]:
+    import time
+    if _LIVE["dados"] is None or time.time() - _LIVE["t"] > LIVE_TTL:
+        _LIVE["dados"], _LIVE["t"] = source.live_games(), time.time()
+    return _LIVE["dados"]
+
+
 PUBLICAS = ("/api/login", "/api/saude", "/api/primeiro-admin")
 # com a senha provisória, só dá para ver quem é, trocar a senha e sair
 TROCA_SENHA = ("/api/meta", "/api/eu", "/api/eu/senha", "/api/sair")
@@ -114,31 +131,41 @@ def _ip(request: Request) -> str | None:
 @app.middleware("http")
 async def acesso(request: Request, call_next):
     """Usuários com sessão (painel de administração) ou, sem usuários, a
-    senha única ``NBASTATS_PASSWORD`` no cabeçalho X-Senha."""
+    senha única ``NBASTATS_PASSWORD`` no cabeçalho X-Senha.
+
+    A consulta ao banco roda numa thread: feita direto aqui, uma gravação
+    demorada de outra requisição pararia o laço do servidor (e o site todo)."""
     path = request.url.path
     request.state.usuario = None
     if not path.startswith("/api/") or path in PUBLICAS:
         return await call_next(request)
+    negado, usuario = await run_in_threadpool(_checar_acesso, path, _token(request), request.headers.get("x-senha", ""))
+    if negado is not None:
+        return negado
+    request.state.usuario = usuario
+    return await call_next(request)
+
+
+def _checar_acesso(path: str, token: str | None, senha: str) -> tuple[JSONResponse | None, dict[str, Any] | None]:
     dep = app.dependency_overrides.get(get_conn, get_conn)()  # respeita o override dos testes
     conn = next(dep) if hasattr(dep, "__next__") else dep
     try:
         modo = auth.modo(conn, _senha_unica())
         if modo == "usuarios":
-            u = auth.sessao(conn, _token(request))
+            u = auth.sessao(conn, token)
             if u is None:
-                return JSONResponse({"detail": "login", "modo": modo}, status_code=401)
+                return JSONResponse({"detail": "login", "modo": modo}, status_code=401), None
             if u["trocar_senha"] and path not in TROCA_SENHA:
-                return JSONResponse({"detail": "trocar_senha"}, status_code=403)
+                return JSONResponse({"detail": "trocar_senha"}, status_code=403), None
             if path.startswith("/api/admin/") and u["papel"] != "admin":
-                return JSONResponse({"detail": "Só para administradores."}, status_code=403)
-            request.state.usuario = u
-        elif modo == "senha":
-            if not hmac.compare_digest(request.headers.get("x-senha", ""), _senha_unica()):
-                return JSONResponse({"detail": "login", "modo": modo}, status_code=401)
+                return JSONResponse({"detail": "Só para administradores."}, status_code=403), None
+            return None, u
+        if modo == "senha" and not hmac.compare_digest(senha, _senha_unica()):
+            return JSONResponse({"detail": "login", "modo": modo}, status_code=401), None
+        return None, None
     finally:
         if hasattr(dep, "__next__"):
             dep.close()  # roda o finally de get_conn (fecha a conexão)
-    return await call_next(request)
 
 
 def _cfg(betaniag: bool | None) -> dict[str, Any] | None:
@@ -671,23 +698,55 @@ def _lavada() -> int:
 
 
 @app.get("/api/jogos")
-def games_route(data: str | None = None, conn=Depends(get_conn)):
-    """Jogos de uma data; sem jogos com box score nela, a última data que tem."""
+def games_route(data: str | None = None, conn=Depends(get_conn), live=Depends(get_live)):
+    """Jogos de uma data, com o placar ao vivo por cima nos jogos de hoje; sem
+    jogos com box score nem em andamento, a última data que tem."""
     day = _day(data)
-    jogos = rk.games_by_date(conn, day)
+    jogos = _com_ao_vivo(rk.games_by_date(conn, day), day, live)
     if not any(j["tem_box"] for j in jogos):
         last = rk.last_game_date(conn, day)
         if last and last != day:
-            return {"data": last, "pedida": day, "jogos": rk.games_by_date(conn, last)}
+            return {"data": last, "pedida": day, "jogos": _com_ao_vivo(rk.games_by_date(conn, last), last, live)}
     return {"data": day, "pedida": day, "jogos": jogos}
 
 
+def _com_ao_vivo(jogos: list[dict[str, Any]], day: str, live) -> list[dict[str, Any]]:
+    try:
+        games = _live_games(live)
+    except Exception:  # placar ao vivo fora do ar: fica o do banco
+        games = []
+    if games and games[0]["data"] == day:
+        return rk.overlay_live(jogos, games)
+    return [{**j, "ao_vivo": False} for j in jogos]
+
+
 @app.get("/api/jogo/{game_id}")
-def game_route(game_id: int, conn=Depends(get_conn)):
+def game_route(game_id: int, conn=Depends(get_conn), live=Depends(get_live)):
     box = rk.boxscore_game(conn, game_id)
+    if box is None or not any(t["jogadores"] for t in box["times"]):
+        try:
+            g = next((x for x in _live_games(live) if x["game_id"] == game_id and x["status"] >= 2), None)
+        except Exception:
+            g = None
+        if g is not None:
+            names = {r["abbreviation"]: r["full_name"] for r in conn.execute("SELECT abbreviation, full_name FROM teams")}
+            return rk.live_boxscore(g, names)
     if box is None:
         raise HTTPException(404, "Jogo não encontrado.")
-    return box
+    return {**box, "ao_vivo": False}
+
+
+@app.get("/api/jogos/time/{team_id}")
+def team_games_route(team_id: int, temporada: int | None = None, data: str | None = None, conn=Depends(get_conn)):
+    """Jogos do time na temporada (padrão: a da data)."""
+    season = temporada or conn.execute("SELECT MAX(season) FROM games WHERE date <= ?", (_day(data),)).fetchone()[0]
+    t = conn.execute("SELECT abbreviation, full_name FROM teams WHERE id = ?", (team_id,)).fetchone()
+    if t is None:
+        raise HTTPException(404, "Time não encontrado.")
+    jogos = rk.team_games(conn, team_id, season)
+    v = sum(j["resultado"] == "V" for j in jogos if not j["playoffs"])
+    d = sum(j["resultado"] == "D" for j in jogos if not j["playoffs"])
+    return {"time": t["abbreviation"], "nome": t["full_name"], "temporada": season, "v": v, "d": d, "jogos": jogos}
 
 
 # ---------- administração ----------
@@ -840,22 +899,6 @@ def admin_backup(conn=Depends(get_conn)):
 
 
 # ---------- ao vivo ----------
-
-_LIVE: dict[str, Any] = {"t": 0.0, "dados": None}
-LIVE_TTL = 20  # segundos: o placar da NBA atualiza a cada ~10-20 s
-
-
-def get_live():
-    from nbastats.sources.nba_live import NbaLiveSource
-    return NbaLiveSource()
-
-
-def _live_games(source) -> list[dict[str, Any]]:
-    import time
-    if _LIVE["dados"] is None or time.time() - _LIVE["t"] > LIVE_TTL:
-        _LIVE["dados"], _LIVE["t"] = source.live_games(), time.time()
-    return _LIVE["dados"]
-
 
 @app.get("/api/aovivo")
 def ao_vivo(mercado: str = "pts", alvo: str = "linha", conn=Depends(get_conn), live=Depends(get_live)):
