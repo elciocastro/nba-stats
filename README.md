@@ -284,7 +284,9 @@ deploy/vps.sh subir        # código do último commit; banco inteiro só na 1ª
 deploy/vps.sh dados        # só as estatísticas do computador (o site não reinicia)
 deploy/vps.sh ajustes      # configurações da Administração (data/ajustes)
 deploy/vps.sh status       # contêiner e hora dos dados na VPS
-deploy/vps.sh desativar    # remove tudo da VPS
+deploy/vps.sh pausar       # tira do ar sem apagar nada (o endereço mostra "em manutenção")
+deploy/vps.sh retomar      # volta ao ar
+deploy/vps.sh desativar    # baixa o banco da VPS para data/backup/vps-*.db e remove tudo
 ```
 
 - **Banco**: na primeira subida vai o `data/nba.db` inteiro, com os usuários.
@@ -303,8 +305,10 @@ deploy/vps.sh desativar    # remove tudo da VPS
 - **No ar**: https://nba.elciocastro.com (Caddy do NetSentinel, que importa
   `/config/sites/*.caddy`; o bloco do site está em
   `/var/lib/docker/volumes/netsentinel_caddy-config/_data/sites/nba.caddy`).
-  Para tirar do ar: apagar esse arquivo e recarregar o Caddy, depois
-  `deploy/vps.sh desativar`.
+  O bloco é versionado em `deploy/nba.caddy` e instalado pelo `subir`;
+  `desativar` o remove e recarrega o Caddy. Com o cron `VPS_SYNC`, pausado o
+  envio de dados falha sem estragar nada; para parar o envio de vez:
+  `deploy/cron.sh instalar` (sem a variável).
 
 Padrão: `root@45.159.173.222` com a chave `~/.ssh/netsentinel-vps`.
 
