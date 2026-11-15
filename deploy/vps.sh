@@ -5,7 +5,10 @@
 #   deploy/vps.sh dados     [root@IP]   # só as estatísticas do computador (sem reiniciar o site)
 #   deploy/vps.sh ajustes   [root@IP]   # envia data/ajustes (configurações da Administração) e reinicia
 #   deploy/vps.sh status    [root@IP]   # contêiner, última atualização dos dados e endereço
-#   deploy/vps.sh desativar [root@IP]   # remove contêiner, imagem e /opt/nba-stats
+#   deploy/vps.sh pausar    [root@IP]   # tira do ar sem apagar nada ("em manutenção" no endereço)
+#   deploy/vps.sh retomar   [root@IP]   # volta ao ar
+#   deploy/vps.sh desativar [root@IP]   # baixa o banco da VPS para data/backup e remove tudo
+#                                       # (contêiner, imagem, /opt/nba-stats e o site no Caddy)
 #   deploy/vps.sh senha     [root@IP]   # senha única (só vale enquanto não houver usuários)
 #
 # Banco: na primeira subida vai o data/nba.db inteiro (com os usuários). Depois,
@@ -33,7 +36,7 @@ PY="${PY:-.venv/bin/python}"
 r() { ssh -i "$KEY" -o BatchMode=yes "$VPS" "$@"; }
 # O domínio fica gravado na VPS: quem rodar o script sem DOMINIO não tira o
 # site do Caddy por engano. DOMINIO=- volta para HTTP na porta (teste).
-if [ "$ACAO" != desativar ] && [ "$ACAO" != senha ]; then
+if [ "$ACAO" != senha ]; then
   if [ -z "$DOMINIO" ]; then DOMINIO=$(r "cat $DIR/dominio 2>/dev/null" || true)
   elif [ "$DOMINIO" = - ]; then DOMINIO=""; r "rm -f $DIR/dominio"
   else r "mkdir -p $DIR && echo '$DOMINIO' > $DIR/dominio"; fi
@@ -49,6 +52,19 @@ dst = sqlite3.connect(sys.argv[1])
 src.backup(dst)
 dst.close(); src.close()
 EOF
+}
+
+# Caddy do NetSentinel: o bloco do site fica em /config/sites (volume
+# caddy-config). Recarrega a partir de uma cópia do Caddyfile do host, porque
+# o contêiner pode estar preso a uma versão antiga do arquivo (0013).
+CADDY=netsentinel-caddy-1
+SITES=/var/lib/docker/volumes/netsentinel_caddy-config/_data/sites
+recarregar_caddy() {
+  r "set -e; V=\$(dirname $SITES)
+     cp /opt/netsentinel/deploy/Caddyfile \$V/Caddyfile.ativo
+     docker exec $CADDY caddy validate --config /config/Caddyfile.ativo --adapter caddyfile >/dev/null 2>&1
+     docker exec $CADDY caddy reload --config /config/Caddyfile.ativo --adapter caddyfile >/dev/null 2>&1"
+  echo "Caddy recarregado."
 }
 
 tem_banco() { r "test -s $DIR/data/nba.db"; }
@@ -114,6 +130,10 @@ case "$ACAO" in
     [ "$primeira" = 1 ] && { banco_inteiro; enviar_ajustes; }
     r "docker build -q -t nba-stats:atual $DIR/src >/dev/null"
     reiniciar
+    if [ -n "$DOMINIO" ] && ! r "cmp -s $SITES/nba.caddy -" < <(sed "s/^DOMINIO {/$DOMINIO {/" deploy/nba.caddy); then
+      sed "s/^DOMINIO {/$DOMINIO {/" deploy/nba.caddy | r "mkdir -p $SITES && cat > $SITES/nba.caddy"
+      recarregar_caddy
+    fi
     [ "$primeira" = 1 ] || so_estatisticas ;;
   dados) so_estatisticas ;;
   ajustes) enviar_ajustes; reiniciar ;;
@@ -121,9 +141,26 @@ case "$ACAO" in
     r "docker ps --filter name=nba-stats --format '{{.Names}} {{.Status}}'
        docker exec nba-stats python -c \"import sqlite3; c = sqlite3.connect('/app/data/nba.db'); print('dados de', c.execute(\\\"SELECT MAX(finished_at) FROM sync_log WHERE kind = 'refresh' AND status = 'ok'\\\").fetchone()[0], 'UTC')\""
     endereco ;;
+  pausar)
+    r "docker stop nba-stats >/dev/null && echo 'Site parado (dados mantidos em $DIR/data).'"
+    [ -n "$DOMINIO" ] && echo "https://$DOMINIO mostra \"em manutenção\". Para voltar: deploy/vps.sh retomar"
+    ;;
+  retomar)
+    r "docker start nba-stats >/dev/null
+       for i in \$(seq 60); do curl -sf localhost:$PORTA/api/saude >/dev/null && break; sleep 1; done
+       docker ps --filter name=nba-stats --format '{{.Names}} {{.Status}}'"
+    endereco ;;
   desativar)
+    mkdir -p data/backup
+    copia="data/backup/vps-$(date +%Y%m%d-%H%M).db"
+    if r "test -s $DIR/data/nba.db"; then
+      r "docker exec nba-stats python -c \"import sqlite3; s = sqlite3.connect('/app/data/nba.db'); d = sqlite3.connect('/app/data/saida.db'); s.backup(d); d.close()\"" 2>/dev/null \
+        || r "cp $DIR/data/nba.db $DIR/data/saida.db"
+      scp -q -i "$KEY" "$VPS:$DIR/data/saida.db" "$copia" && echo "Banco da VPS (logins, apostas, linhas) salvo em $copia"
+    fi
     r "docker rm -f nba-stats nba-stats-antigo >/dev/null 2>&1 || true; docker rmi nba-stats:atual nba-stats:teste >/dev/null 2>&1 || true; rm -rf $DIR"
-    echo "Desativado em $VPS." ;;
+    if r "test -f $SITES/nba.caddy"; then r "rm -f $SITES/nba.caddy"; recarregar_caddy; fi
+    echo "Desativado em $VPS. Para subir de novo: DOMINIO=... deploy/vps.sh subir (o Caddy precisa do bloco em $SITES)." ;;
   senha) r "cut -d= -f2- $DIR/.env" ;;
   *) sed -n '2,19p' "$0"; exit 1 ;;
 esac

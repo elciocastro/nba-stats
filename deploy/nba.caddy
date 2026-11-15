@@ -1,0 +1,16 @@
+# nba-stats (Garrafão) atrás do Caddy do NetSentinel: contêiner nba-stats na
+# rede netsentinel_default. Instalado por deploy/vps.sh em /config/sites
+# (volume caddy-config); DOMINIO é trocado pelo endereço. Remover o arquivo e
+# recarregar o Caddy tira o site do ar.
+DOMINIO {
+	encode zstd gzip
+	header Strict-Transport-Security "max-age=31536000"
+	reverse_proxy nba-stats:8000
+
+	# site parado (deploy/vps.sh pausar) ou reiniciando
+	handle_errors 502 503 504 {
+		header Content-Type "text/html; charset=utf-8"
+		header Cache-Control "no-store"
+		respond `<!doctype html><html lang="pt-BR"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Garrafão</title><body style="margin:0;min-height:100vh;display:grid;place-items:center;background:#0b0f14;color:#e6edf3;font:16px/1.5 system-ui,sans-serif;text-align:center"><div><div style="font-size:48px">🏀</div><h1 style="font-size:22px;margin:8px 0">Garrafão em manutenção</h1><p style="color:#8b98a9;margin:0">Volta em breve.</p></div></body></html>` 503
+	}
+}
