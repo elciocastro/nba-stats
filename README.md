@@ -300,6 +300,11 @@ deploy/vps.sh desativar    # remove tudo da VPS
   `nba.exemplo.com { reverse_proxy nba-stats:8000 }`. Sem `DOMINIO`, é HTTP na
   porta 8100, só para teste.
 - O Streamlit antigo não sobe mais por padrão (`PORTA_ANTIGO=8501` para subir).
+- **No ar**: https://nba.elciocastro.com (Caddy do NetSentinel, que importa
+  `/config/sites/*.caddy`; o bloco do site está em
+  `/var/lib/docker/volumes/netsentinel_caddy-config/_data/sites/nba.caddy`).
+  Para tirar do ar: apagar esse arquivo e recarregar o Caddy, depois
+  `deploy/vps.sh desativar`.
 
 Padrão: `root@45.159.173.222` com a chave `~/.ssh/netsentinel-vps`.
 
