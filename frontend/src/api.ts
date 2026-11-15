@@ -74,7 +74,7 @@ export type Inicio = {
 export type Usuario = { id: number; login: string; nome: string; papel: "admin" | "usuario"; trocar_senha: boolean; expira_em: string | null };
 export type Modo = "usuarios" | "senha" | "aberto";
 export type Meta = { mercados: Record<string, string>; hoje: string; atualizado: string | null; betaniag: boolean;
-  modo: Modo; usuario: Usuario | null; alerta: string | null };
+  modo: Modo; usuario: Usuario | null; alerta: string | null; lavada: number; etiquetas: string[] };
 
 export class SenhaError extends Error {
   constructor(public modo: Modo = "senha") { super("login"); }
@@ -164,11 +164,15 @@ export const aoVivo = (mercado: string, alvo: string) =>
 // ---------- apostas, comparar, notícias ----------
 export type Bet = { id: number; date: string; jogador: string; player_id: number; market: string; side: string;
   line: number; odd: number; units: number; bookmaker: string | null; prob: number | null; proj: number | null;
-  status: string; actual: number | null; profit_units: number | null; casa_time: string | null; fora_time: string | null };
+  status: string; actual: number | null; profit_units: number | null; casa_time: string | null; fora_time: string | null;
+  etiquetas: string[]; usuario: string | null; note: string | null };
+export type Limites = { dia: { unidades: number; limite: number | null }; semana: { unidades: number; limite: number | null };
+  sequencia_perdas: number; limite_sequencia: number | null; avisos: string[] };
+export class LimiteError extends Error { constructor(public avisos: string[]) { super(avisos.join(" ")); } }
 export type Resumo = { apostas: number; pendentes: number; conferidas: number; ganhas: number; acerto_pct: number | null;
   chance_media_pct: number | null; unidades_apostadas: number; lucro_unidades: number; roi_pct: number | null };
 export type Desempenho = { geral: Resumo; mercado: Record<string, Resumo>; unidades: Record<string, Resumo>;
-  faixa_chance: Record<string, Resumo>; lado: Record<string, Resumo>; curva: { data: string; lucro_acumulado: number }[] };
+  faixa_chance: Record<string, Resumo>; lado: Record<string, Resumo>; etiqueta: Record<string, Resumo>; curva: { data: string; lucro_acumulado: number }[] };
 export type TeamSide = { time: string; jogos: number; ritmo: number | null; saldo: number | null; pts_feitos: number | null;
   pts_cedidos: number | null; dvp: { grupo: string; stat: string; media: number | null; rank: number | null; media_rec: number | null; rank_rec: number | null }[] };
 export type Trend = { player_id: number; jogador: string; time: string; l5: number; temporada: number; dif: number; pra_l5: number };
@@ -181,10 +185,17 @@ export type Noticias = { atual: string | null; anterior: string | null;
 const j = call;
 
 export const api2 = {
-  apostas: (status?: string) => j<{ apostas: Bet[]; desempenho: Desempenho; config: { valor_unidade: number | null; moeda: string; unidades: number[] } }>(
-    `/api/apostas${status ? `?status=${status}` : ""}`),
-  apostar: (b: { data: string; player_id: number; mercado: string; lado: string; linha: number; odd: number; unidades: number; casa?: string; obs?: string }) =>
-    j<{ id: number; chance: number | null }>("/api/apostas", { method: "POST", body: JSON.stringify(b) }),
+  apostas: (status?: string, todas = false) => j<{ apostas: Bet[]; desempenho: Desempenho; limites: Limites; por_usuario: boolean;
+    config: { valor_unidade: number | null; moeda: string; unidades: number[]; etiquetas: string[] } }>(
+    `/api/apostas?${qs({ status, todas })}`),
+  apostar: async (b: { data: string; player_id: number; mercado: string; lado: string; linha: number; odd: number; unidades: number;
+                       casa?: string; obs?: string; etiquetas?: string[]; confirmar?: boolean }) => {
+    const r = await fetch("/api/apostas", { method: "POST", headers: { "Content-Type": "application/json", ...authHeaders() }, body: JSON.stringify(b) });
+    const body = await r.json().catch(() => ({}));
+    if (r.status === 409 && body.avisos) throw new LimiteError(body.avisos);
+    if (!r.ok) throw new Error(body.detail ?? r.statusText);
+    return body as { id: number; chance: number | null; avisos: string[] };
+  },
   apagarAposta: (id: number) => j(`/api/apostas/${id}`, { method: "DELETE" }),
   conferir: () => j<{ conferidas: Record<string, number> }>("/api/apostas/conferir", { method: "POST" }),
   times: () => j<{ id: number; sigla: string; nome: string }[]>("/api/times"),
@@ -213,11 +224,11 @@ export type Sistema = { carga: { ultima_ok: string | null; horas: number | null;
     falhas: { kind: string; started_at: string; error: string | null }[] };
   backup: { quantidade: number; ultimo: string | null; horas: number | null; tamanho_mb: number | null; alerta: string | null };
   cargas: { kind: string; started_at: string; finished_at: string | null; status: string; games: number; stats: number; error: string | null }[];
-  banco_mb: number | null };
+  banco_mb: number | null; alertas: { habilitado: boolean; telegram: boolean } };
 
 export const api3 = {
-  ranking: (data: string, janela: number, min_jogos: number, por36: boolean, playoffs: boolean) =>
-    call<{ temporada: number; janela: number; jogadores: RankRow[] }>(`/api/ranking?${qs({ data, janela, min_jogos, por36, playoffs })}`),
+  ranking: (data: string, janela: number, min_jogos: number, por36: boolean, playoffs: boolean, sem_lavadas: boolean) =>
+    call<{ temporada: number; janela: number; lavada: number; jogadores: RankRow[] }>(`/api/ranking?${qs({ data, janela, min_jogos, por36, playoffs, sem_lavadas })}`),
   jogos: (data: string) => call<{ data: string; pedida: string; jogos: JogoDia[] }>(`/api/jogos?${qs({ data })}`),
   jogo: (id: number) => call<{ id: number; data: string; status: string | null; playoffs: boolean; times: BoxTime[] }>(`/api/jogo/${id}`),
   usuarios: () => call<{ usuarios: UsuarioAdm[]; papeis: string[] }>("/api/admin/usuarios"),
@@ -231,4 +242,31 @@ export const api3 = {
   acessos: () => call<{ acessos: Acesso[] }>("/api/admin/acessos"),
   sistema: () => call<Sistema>("/api/admin/sistema"),
   backup: () => call<{ arquivo: string }>("/api/admin/backup", { method: "POST" }),
+};
+
+// ---------- calibração ----------
+export type CalResumo = { n: number; brier: number | null; acerto_pct: number | null; chance_media_pct: number | null;
+  faixas: { faixa: string; n: number; chance_media_pct: number; acerto_pct: number }[] };
+export type Calibracao = {
+  backtest: { temporada: number; desde: string | null; atualizado_em: string; mercados: Record<string, CalResumo> }[];
+  previsoes: { geral: CalResumo; mercados: Record<string, CalResumo>; so_linha_da_casa: CalResumo };
+  apostas: CalResumo;
+};
+export const calibracao = () => call<Calibracao>("/api/calibracao");
+
+// ---------- efeito cascata ----------
+export type Cascata = { fora: string; time: string; adversario: string; game_id: number; novo: boolean; ganho_total: number;
+  companheiros: { player_id: number; jogador: string; com: number; sem: number; ganho: number; jogos_com: number; jogos_sem: number;
+    l10: number | null; proj: number | null; linha: number | null; linha_ref: boolean | null; p_over: number | null; diff: number | null }[] };
+export const cascata = (data: string, mercado: string) =>
+  call<{ data: string; mercado: string; desfalques: Cascata[] }>(`/api/cascata?data=${data}&mercado=${mercado}`);
+
+// ---------- filtros salvos ----------
+export type FiltroParams = { aba?: string; mercado?: string; chance_min?: number; lado?: string; so_casa?: boolean;
+  so_fav?: boolean; sem_duvida?: boolean };
+export type Filtro = { id: number; nome: string; params: FiltroParams };
+export const filtros = {
+  listar: () => call<{ filtros: Filtro[] }>("/api/filtros"),
+  salvar: (nome: string, params: FiltroParams) => call<{ filtros: Filtro[] }>("/api/filtros", { method: "POST", body: JSON.stringify({ nome, params }) }),
+  apagar: (id: number) => call<{ filtros: Filtro[] }>(`/api/filtros/${id}`, { method: "DELETE" }),
 };

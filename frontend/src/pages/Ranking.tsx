@@ -22,12 +22,13 @@ export default function Ranking() {
   const [minJ, setMinJ] = useState(5);
   const [por36, setPor36] = useState(false);
   const [playoffs, setPlayoffs] = useState(false);
+  const [semLavadas, setSemLavadas] = useState(false);
   const [modo, setModo] = useState<"temp" | "janela" | "dif">("temp");
   const [vista, setVista] = useState<"medias" | "arremesso">("medias");
   const [busca, setBusca] = useState("");
   const [time, setTime] = useState("");
-  const q = useQuery({ queryKey: ["ranking", data, janela, minJ, por36, playoffs],
-                       queryFn: () => api3.ranking(data, janela, minJ, por36, playoffs) });
+  const q = useQuery({ queryKey: ["ranking", data, janela, minJ, por36, playoffs, semLavadas],
+                       queryFn: () => api3.ranking(data, janela, minJ, por36, playoffs, semLavadas) });
   const rows = q.data?.jogadores ?? [];
   const times = useMemo(() => [...new Set(rows.flatMap((r) => r.time.split("/")))].filter(Boolean).sort(), [rows]);
   const shown = useMemo(() => rows.filter((r) =>
@@ -94,6 +95,8 @@ export default function Ranking() {
           <input className="input" type="number" min={1} max={82} value={minJ} style={{ width: 64 }} onChange={(e) => setMinJ(Math.max(1, Number(e.target.value)))} /></label>
         <label className="toggle"><input type="checkbox" checked={por36} onChange={(e) => setPor36(e.target.checked)} />Por 36 min</label>
         <label className="toggle"><input type="checkbox" checked={playoffs} onChange={(e) => setPlayoffs(e.target.checked)} />Playoffs</label>
+        <label className="toggle" title="Tira os jogos decididos por muitos pontos, em que os titulares saem cedo">
+          <input type="checkbox" checked={semLavadas} onChange={(e) => setSemLavadas(e.target.checked)} />Sem lavadas</label>
       </div>
       {q.isLoading && <div className="loading">Calculando…</div>}
       {q.error && <div className="err">{String((q.error as Error).message)}</div>}
@@ -102,6 +105,7 @@ export default function Ranking() {
           <p className="muted small" style={{ marginTop: 0 }}>
             {shown.length} jogadores · temporada {q.data.temporada}/{String(q.data.temporada + 1).slice(2)}
             {por36 ? " · contagens por 36 minutos (reservas comparáveis a titulares)" : ""}
+            {semLavadas ? ` · sem jogos decididos por ${q.data.lavada}+ pontos` : ""}
             {modo === "dif" ? ` · últimos ${janela} menos a temporada (verde = subindo)` : ""}. Clique no cabeçalho para ordenar.</p>
           <DataTable key={vista} data={shown} columns={columns} cellClass={cls} onRow={(r) => nav(`/jogador/${r.player_id}?mercado=pts`)}
             initialSort={[{ id: vista === "medias" ? "pts" : "ts_pct", desc: true }]} maxHeight={900} />

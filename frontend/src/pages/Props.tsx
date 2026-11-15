@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { ColumnDef, createColumnHelper } from "@tanstack/react-table";
-import { api, Jogador, Jogo, LinhaIn, Potencial } from "../api";
+import { api, Filtro, FiltroParams, filtros, Jogador, Jogo, LinhaIn, Potencial } from "../api";
 import { usePrefs } from "../App";
 import { Bars, DataTable, heat, num, Photo, SealBadge, Star, useFavs, useMobile } from "../components";
 
@@ -25,7 +25,19 @@ export default function Props() {
   const [jogos, setJogos] = useState<number[]>([]);
   const [busca, setBusca] = useState("");
   const [soFav, setSoFav] = useState(false);
+  const [chanceMin, setChanceMin] = useState(0);
+  const [lado, setLado] = useState("");
+  const [soCasa, setSoCasa] = useState(false);
+  const [semDuvida, setSemDuvida] = useState(false);
   const fav = useFavs();
+  const atual: FiltroParams = { aba, mercado, chance_min: chanceMin, lado, so_casa: soCasa, so_fav: soFav, sem_duvida: semDuvida };
+  const aplicar = (f: FiltroParams) => {
+    const n = new URLSearchParams(sp);
+    if (f.aba) n.set("aba", f.aba);
+    if (f.mercado) n.set("mercado", f.mercado);
+    setSp(n, { replace: true });
+    setChanceMin(f.chance_min ?? 0); setLado(f.lado ?? ""); setSoCasa(!!f.so_casa); setSoFav(!!f.so_fav); setSemDuvida(!!f.sem_duvida);
+  };
   const usesPlayers = ["props", "linhas", "matchups"].includes(aba);
   const q = useQuery({ queryKey: ["props", data, mercado, betaniag], enabled: usesPlayers,
                        queryFn: () => api.props(data, mercado, betaniag) });
@@ -33,7 +45,11 @@ export default function Props() {
   const players = useMemo(() => (q.data?.jogadores ?? []).filter((p) =>
     (!jogos.length || jogos.includes(p.game_id)) &&
     (!busca || p.jogador.toLowerCase().includes(busca.toLowerCase())) &&
-    (!soFav || fav.playerFav(p))), [q.data, jogos, busca, soFav, fav]);
+    (!soFav || fav.playerFav(p)) &&
+    (!chanceMin || (p.chance ?? 0) * 100 >= chanceMin) &&
+    (!lado || p.lado === lado) &&
+    (!soCasa || (p.linha != null && !p.linha_ref)) &&
+    (!semDuvida || !p.lesao)), [q.data, jogos, busca, soFav, fav, chanceMin, lado, soCasa, semDuvida]);
 
   return (
     <>
@@ -54,7 +70,15 @@ export default function Props() {
               <div className="row">
                 <input className="input" placeholder="Buscar jogador" value={busca} onChange={(e) => setBusca(e.target.value)} style={{ width: 180 }} />
                 <label className="toggle"><input type="checkbox" checked={soFav} onChange={(e) => setSoFav(e.target.checked)} />Só favoritos ★</label>
+                <select className="input" value={chanceMin} onChange={(e) => setChanceMin(Number(e.target.value))} title="Chance mínima do lado mais provável">
+                  {[0, 55, 60, 65, 70].map((c) => <option key={c} value={c}>{c ? `Chance ≥ ${c}%` : "Qualquer chance"}</option>)}</select>
+                <select className="input" value={lado} onChange={(e) => setLado(e.target.value)}>
+                  <option value="">Over e under</option><option value="over">Só over</option><option value="under">Só under</option></select>
+                <label className="toggle"><input type="checkbox" checked={soCasa} onChange={(e) => setSoCasa(e.target.checked)} />Só linha da casa</label>
+                <label className="toggle" title="Esconde quem está no injury report (Questionable, Probable...)">
+                  <input type="checkbox" checked={semDuvida} onChange={(e) => setSemDuvida(e.target.checked)} />Sem dúvida de lesão</label>
               </div>
+              <FiltrosSalvos atual={atual} aplicar={aplicar} />
             </>
           )}
         </div>
@@ -69,6 +93,26 @@ export default function Props() {
       {aba === "dvp" && <DvpTab mercado={mercado} />}
       {aba === "potenciais" && <PotenciaisTab busca={busca} setBusca={setBusca} />}
     </>
+  );
+}
+
+function FiltrosSalvos({ atual, aplicar }: { atual: FiltroParams; aplicar: (f: FiltroParams) => void }) {
+  const qc = useQueryClient();
+  const q = useQuery({ queryKey: ["filtros"], queryFn: filtros.listar, staleTime: 300_000 });
+  const set = (d: { filtros: Filtro[] }) => qc.setQueryData(["filtros"], d);
+  const salvar = useMutation({ mutationFn: (nome: string) => filtros.salvar(nome, atual), onSuccess: set,
+                               onError: (e) => alert((e as Error).message) });
+  const apagar = useMutation({ mutationFn: filtros.apagar, onSuccess: set });
+  return (
+    <div className="tabs">
+      <span className="muted small" style={{ alignSelf: "center" }}>Meus filtros:</span>
+      {q.data?.filtros.map((f) => (
+        <span key={f.id} className="gchip">
+          <button className="tab" onClick={() => aplicar(f.params)} title={JSON.stringify(f.params)}>{f.nome}</button>
+          <button className="star" title="Apagar filtro" onClick={() => confirm(`Apagar o filtro "${f.nome}"?`) && apagar.mutate(f.id)}>×</button>
+        </span>))}
+      <button className="tab" onClick={() => { const n = prompt("Nome do filtro (ex.: PRA chance ≥ 60%)"); if (n) salvar.mutate(n); }}>+ Salvar atual</button>
+    </div>
   );
 }
 

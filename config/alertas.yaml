@@ -1,0 +1,13 @@
+# Alertas e resumo do dia pelo Telegram (metrics/alertas.py, `nbastats alertas` e `nbastats resumo`).
+# O token do bot e o chat ficam só no .env:
+#   NBASTATS_TELEGRAM_TOKEN=...   (do @BotFather)
+#   NBASTATS_TELEGRAM_CHAT=...    (id do chat ou do grupo)
+habilitado: false
+
+# Alertas (a cada 15 min no cron): mudança no injury report e linha com valor
+so_favoritos: true      # false = alerta de qualquer jogador
+ev_minimo: 0.05         # linha da casa com valor esperado a partir de +5%
+status_alerta: [Out, Doubtful, Questionable]
+
+# Resumo do dia (17h no cron)
+resumo_top: 5

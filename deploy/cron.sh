@@ -10,6 +10,10 @@
 #   06:00: sync-daily (fecha os jogos da madrugada)
 #   06:30: backup do banco (mantém 14 cópias em data/backup)
 #   12:00: saude (escreve ALERTA no log se a carga falhou ou está velha)
+#   de hora em hora, 12h-22h: previsoes (foto da chance antes dos jogos)
+#   07:00: calibracao (backtest da temporada atual, para a página Calibração)
+#   a cada 15 min, 12h-23h: alertas (Telegram; só se config/alertas.yaml habilitado)
+#   17:00: resumo do dia (Telegram; idem)
 # flock evita duas cargas ao mesmo tempo. Logs em logs/cron.log.
 set -euo pipefail
 
@@ -26,6 +30,10 @@ linhas() {
 0 6 * * * $run sync-daily >> $LOG 2>&1 $TAG
 30 6 * * * cd $DIR && $BIN backup >> $LOG 2>&1 $TAG
 0 12 * * * cd $DIR && $BIN saude >> $LOG 2>&1 $TAG
+5 12-22 * * * $run previsoes >> $LOG 2>&1 $TAG
+0 7 * * * $run calibracao >> $LOG 2>&1 $TAG
+7,22,37,52 12-23 * * * $run alertas >> $LOG 2>&1 $TAG
+0 17 * * * $run resumo >> $LOG 2>&1 $TAG
 EOF
 }
 

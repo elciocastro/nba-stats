@@ -13,6 +13,8 @@ ausencia:
   jogos_recentes: 3
   status: [Out, Doubtful]
 blowout: {pontos: 15, a: -0.995, b: 0.0806}
+# jogo decidido por esta diferença ou mais = lavada (recorte "Sem lavada" e Ranking)
+lavada: {margem: 20}
 mercados:
   pts: {nivel: 0.925, ausencia: 0.574, erro_tipico: 5.14, dist: normal, sd_k: 3.048,
     sd_e: 0.291, brier: 0.2399}

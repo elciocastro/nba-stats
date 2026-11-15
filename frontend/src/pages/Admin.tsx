@@ -157,7 +157,7 @@ function Sistema() {
   const q = useQuery({ queryKey: ["admin-sistema"], queryFn: api3.sistema });
   const bk = useMutation({ mutationFn: api3.backup, onSuccess: () => qc.invalidateQueries({ queryKey: ["admin-sistema"] }) });
   if (!q.data) return <div className="loading">Carregando…</div>;
-  const { carga, backup, cargas, banco_mb } = q.data;
+  const { carga, backup, cargas, banco_mb, alertas } = q.data;
   return (
     <>
       <div className="kpis">
@@ -166,6 +166,9 @@ function Sistema() {
         <div className="kpi"><div className="l">Backups</div><div className={`v ${backup.alerta ? "under" : ""}`}>{backup.quantidade}</div>
           <div className="s">{backup.ultimo ? `último há ${Math.round(backup.horas ?? 0)} h · ${backup.tamanho_mb} MB` : "nenhum"}</div></div>
         <div className="kpi"><div className="l">Banco</div><div className="v">{banco_mb ?? "—"} MB</div><div className="s">data/nba.db</div></div>
+        <div className="kpi"><div className="l">Alertas Telegram</div><div className={`v ${alertas.habilitado && alertas.telegram ? "over" : ""}`}>
+          {alertas.habilitado && alertas.telegram ? "ligados" : "desligados"}</div>
+          <div className="s">{alertas.telegram ? "bot configurado" : "sem token no .env"} · {alertas.habilitado ? "habilitado" : "config/alertas.yaml"}</div></div>
       </div>
       {(carga.alerta || backup.alerta) && <div className="err" style={{ margin: "10px 0" }}>{[carga.alerta, backup.alerta].filter(Boolean).join(" · ")}</div>}
       <div className="row" style={{ margin: "10px 0" }}>

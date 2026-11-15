@@ -169,6 +169,23 @@ def main(argv: list[str] | None = None) -> int:
 
     sub.add_parser("saude", help="avisa (código 1) se a carga falhou ou está velha")
 
+    p = sub.add_parser("alertas", help="envia pelo Telegram mudanças de lesão e linhas com valor (favoritos)")
+    p.add_argument("--simular", action="store_true", help="só mostra, não envia nem marca como enviado")
+    p.add_argument("--data")
+
+    p = sub.add_parser("resumo", help="resumo do dia pelo Telegram (jogos, desfalques, melhores chances)")
+    p.add_argument("--simular", action="store_true", help="só mostra, não envia")
+    p.add_argument("--data")
+
+    p = sub.add_parser("previsoes", help="guarda a chance de cada jogador antes dos jogos (calibração)")
+    p.add_argument("--data", help="AAAA-MM-DD (padrão: hoje)")
+
+    p = sub.add_parser("calibracao", help="calibração pública: backtest de uma temporada fora da amostra")
+    p.add_argument("season", type=int, nargs="?", help="padrão: a temporada mais recente da base")
+    p.add_argument("--desde", help="AAAA-MM-DD; use datas depois do período calibrado")
+    p.add_argument("--passo", type=int, default=1, help="usa 1 dia a cada N (mais rápido)")
+    p.add_argument("--regras", default="config/matchup.yaml")
+
     args = parser.parse_args(argv)
     settings = get_settings()
     conn = db.connect(settings.db_path)
@@ -342,6 +359,40 @@ def main(argv: list[str] | None = None) -> int:
     elif args.cmd == "usuario":
         return _usuario(conn, args)
 
+    elif args.cmd in ("alertas", "resumo"):
+        return _alertas(conn, args)
+
+    elif args.cmd == "previsoes":
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+
+        from .ingest import last_refresh
+        from .metrics import calibracao as cb
+        from .metrics.betaniag import tipoff
+        from .metrics.painel import day_report
+        day = args.data or date.today().isoformat()
+        now_et = datetime.now(ZoneInfo("America/New_York")).replace(tzinfo=None)
+        total = 0
+        for stat in cb.MERCADOS_PREVISAO:
+            report = day_report(conn, day, stat, last_refresh(conn), None)
+            total += cb.save_predictions(conn, day, stat, report, now_et, tipoff)
+        print(f"Previsões guardadas/atualizadas: {total} ({day})")
+
+    elif args.cmd == "calibracao":
+        from .metrics import calibracao as cb
+        rules, params = load_matchup_rules(args.regras), load_projection_params()
+        season = args.season or conn.execute("SELECT MAX(season) FROM games").fetchone()[0]
+        print(f"Montando o histórico de {season} (pode levar alguns minutos)...", flush=True)
+        data = build_dataset(conn, season, rules, params, start=args.desde, step=args.passo)
+        if not data:
+            print("Sem jogos suficientes.")
+            return 1
+        result = {s: cb.resumo(cb.backtest_points(data, params, s)) for s in MATCHUP_STATS}
+        cb.save_backtest(conn, season, args.desde, result)
+        rows = [{"mercado": s, "n": r["n"], "chance_media": r["chance_media_pct"], "acerto": r["acerto_pct"],
+                 "brier": r["brier"]} for s, r in result.items() if r["n"]]
+        _table(rows, ["mercado", "n", "chance_media", "acerto", "brier"], 50)
+
     elif args.cmd == "backup":
         import os
         from pathlib import Path
@@ -357,6 +408,58 @@ def main(argv: list[str] | None = None) -> int:
             print(f"ALERTA: {st['alerta']}", file=sys.stderr)
             return 1
         print(f"OK: última carga boa há {st['horas']} h ({st['ultima_ok']}).")
+    return 0
+
+
+def _alertas(conn, args) -> int:
+    from . import notificar
+    from .ingest import last_refresh
+    from .metrics import alertas as al
+    from .metrics import destaques as dq
+    from .metrics import favoritos as fv
+    from .metrics import noticias as nt
+    from .metrics.painel import day_report
+    from .metrics.sistema import status_carga
+
+    cfg = al.load_alert_config()
+    if not cfg.get("habilitado") and not args.simular:
+        print("Alertas desligados (config/alertas.yaml: habilitado: false).")
+        return 0
+    day = args.data or date.today().isoformat()
+    version = last_refresh(conn)
+    reports = {s: day_report(conn, day, s, version, None) for s in dq.HOME_MARKETS}
+    opps = dq.opportunities(reports, None)
+    if args.cmd == "resumo":
+        texto = al.daily_summary(day, dq.game_cards(reports, None), opps, status_carga(conn)["alerta"],
+                                 cfg.get("resumo_top", 5))
+        if args.simular:
+            print(texto)
+            return 0
+        try:
+            notificar.enviar(texto)
+        except notificar.NaoConfigurado as exc:
+            print(exc, file=sys.stderr)
+            return 1
+        print("Resumo enviado.")
+        return 0
+    favs = fv.list_favorites(conn)
+    team_ids = {r["abbreviation"]: r["id"] for r in conn.execute("SELECT id, abbreviation FROM teams")}
+    alerts = al.injury_alerts(nt.changes(conn, day)["mudancas"], favs, team_ids, cfg, day)
+    alerts += al.value_alerts(opps["com_odd"], favs, cfg, day)
+    novos = al.pending(conn, alerts)
+    if args.simular:
+        print("\n".join(t for _, t in novos) or "(nenhum alerta novo)")
+        return 0
+    if not novos:
+        print("Nenhum alerta novo.")
+        return 0
+    try:
+        notificar.enviar("\n\n".join(t for _, t in novos))
+    except notificar.NaoConfigurado as exc:
+        print(exc, file=sys.stderr)
+        return 1
+    al.mark_sent(conn, [k for k, _ in novos])
+    print(f"{len(novos)} alerta(s) enviado(s).")
     return 0
 
 

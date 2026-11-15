@@ -6,7 +6,7 @@ Legenda: **[P0]** bloqueia o resto · **[P1]** necessário para o MVP ·
 
 ## Estado atual
 
-Atualizado em 2026-11-15 (155 testes). Detalhes do que o site faz no README.
+Atualizado em 2026-11-15 (174 testes). Detalhes do que o site faz no README.
 
 - **Dados**: nba_api validada contra o nba.com (seção 1); duas temporadas na
   base; agenda, injury report oficial (a cada 15 min) e zonas de arremesso.
@@ -25,7 +25,11 @@ Atualizado em 2026-11-15 (155 testes). Detalhes do que o site faz no README.
 painel de administração, cron, backup, alerta de carga e CI
 (`docs/decisoes/0010-acesso-operacao-e-diferenciais.md`).
 
-**Próximo**: fase 9 (diferenciais, abaixo), fase 3b (API de odds, depende das
+**Fase 9 (2026-11-15)**: calibração pública, efeito cascata, alertas e resumo
+no Telegram (desligados até criar o bot), sem lavadas, diário de apostas,
+jogo responsável, filtros salvos e PWA (`docs/decisoes/0011-fase9-diferenciais.md`).
+
+**Próximo**: fase 3b (API de odds, depende das
 casas), validar as faixas do selo com o registro de apostas (5i) e mostrar ao
 colega (2.1).
 
@@ -229,30 +233,37 @@ ritmo, saldo, desfalques, nota por critério, agenda, telas Matchups e DvP,
   Sistema). `nbastats usuario criar|listar|senha|ativar|desativar`.
 - [x] 8b. Cron, backup diário e alerta de carga (3.4, 3.5, 3.6).
 - [x] 8c. CI no GitHub Actions: pytest e build do front em cada PR (6.5).
-- [ ] 8d. Favoritos e apostas **por usuário** (hoje são de todos). Precisa de
-  `user_id` nas tabelas e migração (7.1).
+- [ ] 8d. **Favoritos por usuário** (hoje são de todos). As apostas já são
+  por usuário (fase 9, com filtro Minhas/Todas).
 - [ ] 8e. Criar o primeiro admin no site da VPS quando subir de novo
   (Administração → criar; a senha única deixa de valer).
 
 **Fase 9 — diferenciais** (pesquisa em 0010; ordem sugerida)
-- [ ] 9a. **Calibração pública**: curva "o site disse X%, bateu Y%" com os
+- [x] 9a. **Calibração pública**: curva "o site disse X%, bateu Y%" com os
   jogos disputados (backtest) e com as apostas registradas.
-- [ ] 9b. **Efeito cascata da lesão**: quando o injury report muda, recalcular
+- [x] 9b. **Efeito cascata da lesão**: quando o injury report muda, recalcular
   e mostrar quem ganha minutos/uso e a nova projeção contra a linha.
-- [ ] 9c. **Alertas** (Telegram primeiro) para favoritos: mudança de status,
+- [x] 9c. **Alertas** (Telegram primeiro; falta criar o bot e ligar) para favoritos: mudança de status,
   linha com valor, jogador a caminho de bater no Ao Vivo.
-- [ ] 9d. **Resumo do dia** às 17h (Telegram/e-mail): jogos, desfalques e as
+- [x] 9d. **Resumo do dia** às 17h (Telegram/e-mail): jogos, desfalques e as
   melhores oportunidades.
-- [ ] 9e. **Médias sem garbage time** (jogos decididos por 20+ no 4º quarto)
+- [x] 9e. **Médias sem garbage time** (jogos decididos por 20+ no 4º quarto)
   como opção nas janelas e na projeção de minutos.
-- [ ] 9f. **Diário de apostas**: motivo/etiqueta por aposta, notas, e quais
+- [x] 9f. **Diário de apostas**: motivo/etiqueta por aposta, notas, e quais
   motivos dão lucro; CLV quando houver odds (4d).
-- [ ] 9g. **Jogo responsável**: limite de unidades por dia/semana e aviso de
+- [x] 9g. **Jogo responsável**: limite de unidades por dia/semana e aviso de
   sequência de perdas (configurável por usuário).
-- [ ] 9h. **Filtros salvos** na página Props (ex.: "PRA, chance ≥ 60%, só
+- [x] 9h. **Filtros salvos** na página Props (ex.: "PRA, chance ≥ 60%, só
   favoritos").
-- [ ] 9i. **PWA**: instalar no celular, ícone, funcionar com conexão ruim.
+- [x] 9i. **PWA**: instalar no celular, ícone, funcionar com conexão ruim.
 - [ ] 9j. **Comparar linhas entre casas** (depende de 3b).
+- [ ] 9k. Alerta "a caminho de bater" no Ao Vivo (precisa consultar o placar
+  a cada poucos minutos durante os jogos).
+- [ ] 9l. Projeção de minutos com o risco de lavada já entrando por jogador
+  (hoje o recorte "Sem lavada" e o risco de blowout ficam separados).
+- [ ] 9m. A calibração mostrou o site **otimista na faixa 70–80%** (promete
+  ~72%, acerta ~61% nos 1.188 palpites do backtest). Investigar a cauda da
+  distribuição antes de ligar o selo/unidade (5i).
 
 ## 4. Métricas e análises — [P1] [?]
 
@@ -275,6 +286,7 @@ Dependem do item 2.3. Candidatas:
   página Props (o box score ainda usa siglas).
 - [x] **5.2 Nomes de colunas legíveis** (site novo).
 - [ ] **5.3 Exportar tabela em CSV**: feito no Ranking; falta Props e Apostas.
+- [ ] **5.6 Filtro de playoffs** nas janelas do jogador (o Ranking já tem).
 - [x] **5.4 Mostrar a data da última atualização** (do `sync_log`).
 - [ ] **5.5 Editar os critérios de potencial pelo site** (hoje é o YAML).
   Só depois que os critérios estabilizarem.
@@ -296,8 +308,8 @@ Pré-requisito: item 2.4 decidido (no servidor, só BALLDONTLIE funciona).
 
 ## 7. Qualidade técnica — [P2]
 
-- [ ] **7.1 Migrations do schema**: hoje `schema.sql` só cria tabelas.
-  Quando mudar uma coluna, precisa de migração (Alembic ou script versionado).
+- [x] **7.1 Migrations do schema**: `db.migrate` adiciona colunas novas em
+  bancos antigos (lista `COLUMNS`); renomear/apagar coluna ainda é manual.
 - [ ] **7.2 Lint e formatação** (ruff) no CI.
 - [ ] **7.3 Teste de contrato das fontes**: teste opcional (marcado, fora do
   CI) que chama a API real e confere os campos esperados.

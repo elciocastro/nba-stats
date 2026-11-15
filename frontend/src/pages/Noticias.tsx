@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { api2 } from "../api";
+import { api2, cascata } from "../api";
 import { usePrefs } from "../App";
 import { Photo } from "../components";
 
@@ -22,6 +22,7 @@ export default function Noticias() {
   return (
     <>
       <h1>Notícias de lesão</h1>
+      <Cascata />
       {!n.atual ? <p className="muted">Nenhum injury report guardado para esta data. Use “Atualizar dados”.</p> : (
         <>
           <p className="muted small">Último relatório: {n.atual.slice(11)} ET{n.anterior ? ` · comparado com ${n.anterior.slice(11)} ET` : " (primeiro do dia)"} · {n.relatorios.length} relatórios na data</p>
@@ -58,6 +59,42 @@ export default function Noticias() {
           </div>
         </>
       )}
+    </>
+  );
+}
+
+const CMK: Record<string, string> = { pra: "PRA", pts: "Pontos", reb: "Rebotes", ast: "Assist.", fg3m: "3PM" };
+
+function Cascata() {
+  const { data } = usePrefs();
+  const nav = useNavigate();
+  const [mk, setMk] = useState("pra");
+  const q = useQuery({ queryKey: ["cascata", data, mk], queryFn: () => cascata(data, mk) });
+  return (
+    <>
+      <h2>Efeito cascata</h2>
+      <p className="muted small" style={{ marginTop: 0 }}>Quem ganha com cada desfalque de hoje: média nos jogos com e sem o companheiro
+        (pelo menos 2 jogos sem) e a projeção do dia contra a linha. 🆕 = mudou no último injury report (a linha da casa pode não ter ajustado).</p>
+      <div className="tabs" style={{ marginBottom: 10 }}>{Object.entries(CMK).map(([k, v]) =>
+        <button key={k} className={`tab ${k === mk ? "on" : ""}`} onClick={() => setMk(k)}>{v}</button>)}</div>
+      {q.isLoading && <div className="loading">Calculando…</div>}
+      {q.data && !q.data.desfalques.length && <p className="muted">Nenhum desfalque com amostra suficiente hoje.</p>}
+      <div className="grid2">{q.data?.desfalques.map((d) => (
+        <div key={`${d.time}${d.fora}`} className="panel">
+          <div className="row" style={{ justifyContent: "space-between" }}>
+            <b>{d.novo ? "🆕 " : ""}{d.fora} fora <span className="muted small">({d.time} x {d.adversario})</span></b>
+            <span className="muted small">{CMK[mk]}</span></div>
+          <div className="tw" style={{ marginTop: 8 }}><table className="t">
+            <thead><tr><th>Companheiro</th><th>Com</th><th>Sem</th><th>Ganho</th><th>Proj.</th><th>Linha</th><th>Proj−linha</th></tr></thead>
+            <tbody>{d.companheiros.map((c) => (
+              <tr key={c.player_id} style={{ cursor: "pointer" }} onClick={() => nav(`/jogador/${c.player_id}?mercado=${mk}`)}>
+                <td><b>{c.jogador}</b></td><td>{c.com}</td><td>{c.sem} <span className="muted small">{c.jogos_sem}j</span></td>
+                <td className={c.ganho >= 2 ? "over" : c.ganho <= -2 ? "under" : ""}>{c.ganho > 0 ? "+" : ""}{c.ganho}</td>
+                <td>{c.proj?.toFixed(1) ?? "—"}</td><td>{c.linha ?? "—"}{c.linha_ref ? <span className="muted small"> ref</span> : ""}</td>
+                <td className={c.diff == null ? "" : c.diff > 0 ? "over" : c.diff < 0 ? "under" : ""}>{c.diff == null ? "—" : `${c.diff > 0 ? "+" : ""}${c.diff}`}</td>
+              </tr>))}</tbody></table></div>
+        </div>))}
+      </div>
     </>
   );
 }

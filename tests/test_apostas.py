@@ -75,3 +75,30 @@ def test_confere_sozinho_e_mede(loaded):
     delete_bet(loaded, e)
     assert len(list_bets(loaded)) == 4
     assert len(list_bets(loaded, status="ganha")) == 1
+
+
+def test_etiquetas_por_usuario_e_desempenho(conn):
+    from nbastats.metrics.apostas import list_bets, performance
+    add_bet(conn, day="2026-11-05", player_id=1, market="pts", side="over", line=1, odd=1.9, units=1,
+            tags=["Matchup (DvP)", "H2H", "H2H", " "], user_id=7)
+    add_bet(conn, day="2026-11-05", player_id=1, market="pts", side="over", line=1, odd=1.9, units=1, user_id=8)
+    conn.execute("UPDATE bets SET status = 'ganha', profit_units = 0.9")
+    assert list_bets(conn, user_id=7)[0]["etiquetas"] == ["Matchup (DvP)", "H2H"]
+    assert len(list_bets(conn)) == 2 and len(list_bets(conn, user_id=8)) == 1
+    et = performance(conn)["etiqueta"]
+    assert et["H2H"]["apostas"] == 1 and et["sem etiqueta"]["apostas"] == 1
+    assert performance(conn, user_id=8)["geral"]["apostas"] == 1
+
+
+def test_limites_do_jogo_responsavel(conn):
+    from nbastats.metrics.apostas import limits
+    cfg = {"jogo_responsavel": {"limite_unidades_dia": 2, "limite_unidades_semana": 3, "aviso_sequencia_perdas": 2}}
+    for day in ("2026-11-01", "2026-11-05", "2026-11-05"):
+        add_bet(conn, day=day, player_id=1, market="pts", side="over", line=1, odd=1.9, units=1)
+    conn.execute("UPDATE bets SET status = 'perdida', settled_at = date WHERE id IN (2, 3)")
+    lim = limits(conn, "2026-11-05", cfg)
+    assert lim["dia"]["unidades"] == 2 and lim["semana"]["unidades"] == 3 and lim["sequencia_perdas"] == 2
+    assert len(lim["avisos"]) == 1 and "derrotas" in lim["avisos"][0]
+    lim = limits(conn, "2026-11-05", cfg, extra_units=1)
+    assert len(lim["avisos"]) == 3
+    assert limits(conn, "2026-11-20", cfg)["semana"]["unidades"] == 0

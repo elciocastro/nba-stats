@@ -30,6 +30,9 @@ from nbastats.metrics import comparar as cp
 from nbastats.metrics import noticias as nt
 from nbastats.metrics import destaques as dq
 from nbastats.metrics import favoritos as fv
+from nbastats.metrics import filtros as fl
+from nbastats.metrics import calibracao as cb
+from nbastats.metrics import cascata as cs
 from nbastats.metrics import ranking as rk
 from nbastats.metrics import sistema as si
 from nbastats.metrics.comparar import _season_of
@@ -271,7 +274,8 @@ def meta(request: Request, conn=Depends(get_conn)):
     cfg = bt.load_betaniag()
     return {"mercados": MARKETS, "hoje": date.today().isoformat(), "atualizado": last_refresh(conn),
             "betaniag": bool(cfg.get("habilitado")), "esportes": bt.active_sports(cfg),
-            "modo": auth.modo(conn, _senha_unica()), "usuario": request.state.usuario,
+            "modo": auth.modo(conn, _senha_unica()), "usuario": request.state.usuario, "lavada": _lavada(),
+            "etiquetas": ap.load_bet_config().get("etiquetas") or [],
             "alerta": si.status_carga(conn)["alerta"]}
 
 
@@ -282,6 +286,8 @@ def props(data: str | None = None, mercado: str = "pts", betaniag: bool | None =
         raise HTTPException(400, "mercado inválido")
     day = _day(data)
     report = day_report(conn, day, mercado, last_refresh(conn), _cfg(betaniag))
+    if day == date.today().isoformat():  # foto antes do jogo, para a calibração pública
+        _guardar_previsoes(conn, day, mercado, report)
     season = report[0]["jogo"]["season"] if report else None
     return {
         "data": day, "mercado": mercado,
@@ -447,20 +453,37 @@ class Aposta(BaseModel):
     unidades: float = 1.0
     casa: str | None = None
     obs: str | None = None
+    etiquetas: list[str] = []
+    confirmar: bool = False  # registra mesmo passando dos limites do jogo responsável
+
+
+def _uid(request: Request) -> int | None:
+    u = request.state.usuario
+    return u["id"] if u else None
 
 
 @app.get("/api/apostas")
-def bets(status: str | None = None, conn=Depends(get_conn)):
+def bets(request: Request, status: str | None = None, todas: bool = False, conn=Depends(get_conn)):
+    """Com login, mostra as apostas da pessoa (``todas=true`` mostra as de todos)."""
     cfg = ap.load_bet_config()
-    return {"apostas": ap.list_bets(conn, status=status), "desempenho": ap.performance(conn),
-            "config": {k: cfg.get(k) for k in ("valor_unidade", "moeda", "unidades")}}
+    uid = None if todas else _uid(request)
+    return {"apostas": ap.list_bets(conn, status=status, user_id=uid), "desempenho": ap.performance(conn, user_id=uid),
+            "limites": ap.limits(conn, date.today().isoformat(), cfg, _uid(request)),
+            "por_usuario": request.state.usuario is not None,
+            "config": {k: cfg.get(k) for k in ("valor_unidade", "moeda", "unidades", "etiquetas")}}
 
 
 @app.post("/api/apostas")
-def add_bet(body: Aposta, conn=Depends(get_conn)):
-    """Registra com a fotografia do momento: chance e projeção calculadas agora."""
+def add_bet(body: Aposta, request: Request, conn=Depends(get_conn)):
+    """Registra com a fotografia do momento: chance e projeção calculadas agora.
+    Passando dos limites do jogo responsável, responde 409 com os avisos; o
+    site pergunta e reenvia com ``confirmar``."""
     if body.mercado not in MARKETS:
         raise HTTPException(400, "mercado inválido")
+    cfg = ap.load_bet_config()
+    lim = ap.limits(conn, body.data, cfg, _uid(request), extra_units=body.unidades)
+    if lim["avisos"] and not body.confirmar:
+        return JSONResponse({"detail": " ".join(lim["avisos"]), "avisos": lim["avisos"], "limites": lim}, status_code=409)
     report = day_report(conn, body.data, body.mercado, last_refresh(conn), None)
     p = next((p for g in report for p in g["jogadores"] if p["player_id"] == body.player_id), None)
     prob = proj = None
@@ -473,10 +496,10 @@ def add_bet(body: Aposta, conn=Depends(get_conn)):
         bet_id = ap.add_bet(conn, day=body.data, player_id=body.player_id, market=body.mercado, side=body.lado,
                             line=body.linha, odd=body.odd, units=body.unidades,
                             game_id=p.get("game_id") if p else None, bookmaker=body.casa, prob=prob, proj=proj,
-                            note=body.obs)
+                            note=body.obs, tags=body.etiquetas, user_id=_uid(request))
     except ValueError as e:
         raise HTTPException(400, str(e))
-    return {"id": bet_id, "chance": prob}
+    return {"id": bet_id, "chance": prob, "avisos": lim["avisos"]}
 
 
 @app.delete("/api/apostas/{bet_id}")
@@ -530,14 +553,72 @@ def update(forcar: bool = False, conn=Depends(get_conn)):
     return {**res, "atualizado": last_refresh(conn)}
 
 
+def _guardar_previsoes(conn, day: str, mercado: str, report) -> None:
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    try:
+        cb.save_predictions(conn, day, mercado, report,
+                            datetime.now(ZoneInfo("America/New_York")).replace(tzinfo=None), bt.tipoff)
+    except Exception:  # a foto é um extra; nunca derruba a página
+        pass
+
+
+class Filtro(BaseModel):
+    nome: str
+    params: dict[str, Any]
+
+
+@app.get("/api/filtros")
+def filters(request: Request, conn=Depends(get_conn)):
+    return {"filtros": fl.list_filters(conn, _uid(request))}
+
+
+@app.post("/api/filtros")
+def save_filter(body: Filtro, request: Request, conn=Depends(get_conn)):
+    try:
+        fl.save_filter(conn, body.nome, body.params, _uid(request))
+    except ValueError as exc:
+        raise HTTPException(422, str(exc))
+    return {"filtros": fl.list_filters(conn, _uid(request))}
+
+
+@app.delete("/api/filtros/{filter_id}")
+def delete_filter(filter_id: int, request: Request, conn=Depends(get_conn)):
+    fl.delete_filter(conn, filter_id, _uid(request))
+    return {"filtros": fl.list_filters(conn, _uid(request))}
+
+
+@app.get("/api/cascata")
+def cascade(data: str | None = None, mercado: str = "pra", conn=Depends(get_conn)):
+    """Quem ganha com cada desfalque do dia; novidades do último injury report primeiro."""
+    if mercado not in MARKETS:
+        raise HTTPException(400, "mercado inválido")
+    day = _day(data)
+    report = day_report(conn, day, mercado, last_refresh(conn), None)
+    novos = [c["jogador"] for c in nt.changes(conn, day)["mudancas"]
+             if c["tipo"] in ("entrou", "piorou", "lista") and c["agora"] in ("Out", "Doubtful")]
+    return {"data": day, "mercado": mercado, "desfalques": cs.cascata(report, novos)}
+
+
+@app.get("/api/calibracao")
+def calibration(desde: str | None = None, conn=Depends(get_conn)):
+    return cb.report(conn, desde)
+
+
 # ---------- ranking e jogo (box score) ----------
 
 @app.get("/api/ranking")
 def ranking_route(data: str | None = None, janela: int = Query(10, ge=1, le=82), min_jogos: int = Query(5, ge=1),
-                  por36: bool = False, playoffs: bool = False, conn=Depends(get_conn)):
+                  por36: bool = False, playoffs: bool = False, sem_lavadas: bool = False, conn=Depends(get_conn)):
     season = _season_of(conn, _day(data))
-    return {"temporada": season, "janela": janela,
-            "jogadores": rk.ranking(conn, season, janela, min_jogos, por36, playoffs)}
+    corte = _lavada() if sem_lavadas else None
+    return {"temporada": season, "janela": janela, "lavada": _lavada(),
+            "jogadores": rk.ranking(conn, season, janela, min_jogos, por36, playoffs, corte)}
+
+
+def _lavada() -> int:
+    """Diferença final a partir da qual o jogo conta como lavada (config/projecao.yaml)."""
+    return int((load_projection_params().get("lavada") or {}).get("margem", 20))
 
 
 @app.get("/api/jogos")
@@ -641,7 +722,10 @@ def admin_system(conn=Depends(get_conn)):
     syncs = [dict(r) for r in conn.execute(
         "SELECT kind, started_at, finished_at, status, games, stats, substr(error, 1, 200) AS error"
         " FROM sync_log ORDER BY id DESC LIMIT 15")]
+    from nbastats.metrics.alertas import load_alert_config
+    tg = bool(os.getenv("NBASTATS_TELEGRAM_TOKEN") and os.getenv("NBASTATS_TELEGRAM_CHAT"))
     return {"carga": si.status_carga(conn), "backup": si.status_backup(BACKUP_DIR), "cargas": syncs,
+            "alertas": {"habilitado": bool(load_alert_config().get("habilitado")), "telegram": tg},
             "banco_mb": round(db_file.stat().st_size / 1e6, 1) if db_file.exists() else None}
 
 

@@ -9,3 +9,21 @@ unidades: [0.5, 1.0, 2.0]
 
 # Jogador que não entrou em quadra: aposta anulada (devolve), como na maioria das casas
 anular_se_nao_jogou: true
+
+# Diário: motivos/etiquetas oferecidos ao registrar (dá para escrever outros)
+etiquetas:
+  - Matchup (DvP)
+  - Desfalque no time
+  - Minutos subindo
+  - Ritmo do jogo
+  - Linha atrasada
+  - H2H
+  - Forma recente
+  - Palpite
+
+# Jogo responsável: o site avisa (e pede confirmação) ao passar destes limites.
+# Por usuário quando há login; sem login, valem para todas as apostas.
+jogo_responsavel:
+  limite_unidades_dia: 5
+  limite_unidades_semana: 15
+  aviso_sequencia_perdas: 4   # derrotas seguidas

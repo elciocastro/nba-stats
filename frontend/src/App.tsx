@@ -12,6 +12,7 @@ import Noticias from "./pages/Noticias";
 import Ranking from "./pages/Ranking";
 import Jogos from "./pages/Jogos";
 import Admin from "./pages/Admin";
+import Calibracao from "./pages/Calibracao";
 
 type Prefs = { data: string; setData: (d: string) => void; betaniag: boolean; setBetaniag: (b: boolean) => void };
 const Ctx = createContext<Prefs>(null!);
@@ -98,6 +99,7 @@ function Shell() {
           <NavLink to="/noticias">Notícias</NavLink>
           <NavLink to="/ranking">Ranking</NavLink>
           <NavLink to="/jogos">Jogos</NavLink>
+          <NavLink to="/calibracao">Calibração</NavLink>
         </nav>
         <span className="sp" />
         <Atualizar />
@@ -118,6 +120,7 @@ function Shell() {
           <Route path="/ranking" element={<Ranking />} />
           <Route path="/jogos" element={<Jogos />} />
           <Route path="/jogos/:id" element={<Jogos />} />
+          <Route path="/calibracao" element={<Calibracao />} />
           <Route path="/admin" element={m ? <Admin meta={m} /> : null} />
           <Route path="/conta" element={<TrocarSenha onOk={() => null} />} />
           <Route path="/mais" element={<Mais meta={m} />} />
@@ -163,7 +166,7 @@ function Atualizar() {
 
 function MaisLink() {
   const { pathname } = useLocation();
-  const on = ["/mais", "/comparar", "/noticias", "/ranking", "/jogos", "/admin", "/conta"].some((p) => pathname.startsWith(p));
+  const on = ["/mais", "/comparar", "/noticias", "/ranking", "/jogos", "/calibracao", "/admin", "/conta"].some((p) => pathname.startsWith(p));
   return <NavLink to="/mais" className={on ? "active" : ""}><b>⋯</b>Mais</NavLink>;
 }
 
@@ -171,7 +174,8 @@ function Mais({ meta }: { meta?: Meta }) {
   const items = [["/comparar", "⇄", "Comparar", "Jogador × jogador, time × time e tendências"],
                  ["/noticias", "✚", "Notícias", "Mudanças no injury report e quem pode voltar"],
                  ["/ranking", "≡", "Ranking", "Médias, últimos jogos, por 36 min e arremesso"],
-                 ["/jogos", "▦", "Jogos", "Box score completo de cada jogo"]];
+                 ["/jogos", "▦", "Jogos", "Box score completo de cada jogo"],
+                 ["/calibracao", "◎", "Calibração", "Quando o site disse X%, quanto acertou"]];
   if (meta && podeAdmin(meta)) items.push(["/admin", "⚙", "Administração", "Usuários, acessos, carga e backup"]);
   if (meta?.usuario) items.push(["/conta", "🔑", "Trocar senha", meta.usuario.nome]);
   return (

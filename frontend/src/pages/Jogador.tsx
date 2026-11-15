@@ -6,7 +6,7 @@ import {
   Tooltip, XAxis, YAxis,
 } from "recharts";
 import { createColumnHelper, flexRender, getCoreRowModel, getSortedRowModel, SortingState, useReactTable } from "@tanstack/react-table";
-import { api, api2, Detalhe, JogoLog } from "../api";
+import { api, api2, Detalhe, JogoLog, LimiteError } from "../api";
 import { usePrefs } from "../App";
 import { ddmm, heat, num, pct, Photo, SealBadge, Star, useFavs } from "../components";
 
@@ -14,9 +14,12 @@ const MARKETS: Record<string, string> = {
   pts: "Pontos", reb: "Rebotes", ast: "Assist.", pra: "PRA", pr: "PR", pa: "PA", ra: "RA", fg3m: "3FM",
   fg3a: "3FA", fg2m: "2FM", fg2a: "2FA", ftm: "FTM", fta: "FTA", stl: "Roubos", blk: "Tocos", turnover: "Turnovers",
 };
+// "Sem lavada" usa a margem de config/projecao.yaml (lavada.margem, vem em /api/meta)
+let LAVADA = 20;
 const SPLITS: Record<string, (g: JogoLog) => boolean> = {
   Casa: (g) => g.em_casa, Fora: (g) => !g.em_casa, Vitória: (g) => g.resultado === "V",
   Derrota: (g) => g.resultado === "D", "Sem descanso": (g) => g.descanso === 0,
+  "Sem lavada": (g) => g.margem == null || Math.abs(g.margem) < LAVADA,
 };
 const LOG_COLS: [string, string][] = [["minutes", "Min"], ["pts", "PTS"], ["reb", "REB"], ["ast", "AST"],
   ["pra", "PRA"], ["fg3m", "3PM"], ["stl", "ROU"], ["blk", "TOC"]];
@@ -26,6 +29,8 @@ export default function JogadorPage() {
   const [sp, setSp] = useSearchParams();
   const mercado = sp.get("mercado") ?? "pts";
   const { data, betaniag } = usePrefs();
+  const meta = useQuery({ queryKey: ["meta"], queryFn: api.meta });
+  if (meta.data?.lavada) LAVADA = meta.data.lavada;
   const q = useQuery({ queryKey: ["jogador", id, data, mercado, betaniag],
                        queryFn: () => api.jogador(Number(id), data, mercado, betaniag) });
 
@@ -217,14 +222,26 @@ function BetForm({ d, mercado, data, line, oo, ou, po }: { d: Detalhe; mercado: 
   const [lado, setLado] = useState<"over" | "under">(po != null && po < 0.5 ? "under" : "over");
   const [un, setUn] = useState(1);
   const [odd, setOdd] = useState(0);
+  const [tags, setTags] = useState<string[]>([]);
+  const [obs, setObs] = useState("");
   const [casa, setCasa] = useState(() => { try { return localStorage.getItem("casa") ?? ""; } catch { return ""; } });
+  const meta = useQuery({ queryKey: ["meta"], queryFn: api.meta });
   const qc = useQueryClient();
   const oddLado = odd || (lado === "over" ? oo : ou);
+  const body = (confirmar = false) => ({ data, player_id: d.player_id, mercado, lado, linha: line, odd: oddLado, unidades: un,
+    casa: casa || undefined, obs: obs || undefined, etiquetas: tags, confirmar });
   const m = useMutation({
-    mutationFn: () => api2.apostar({ data, player_id: d.player_id, mercado, lado, linha: line, odd: oddLado, unidades: un, casa: casa || undefined }),
-    onSuccess: () => { try { localStorage.setItem("casa", casa); } catch { /* sem storage */ } qc.invalidateQueries({ queryKey: ["apostas"] }); },
+    mutationFn: async () => {
+      try { return await api2.apostar(body()); } catch (e) {
+        if (e instanceof LimiteError && confirm(`${e.avisos.join("\n")}\n\nRegistrar mesmo assim?`)) return api2.apostar(body(true));
+        throw e;
+      }
+    },
+    onSuccess: () => { try { localStorage.setItem("casa", casa); } catch { /* sem storage */ } setTags([]); setObs("");
+      qc.invalidateQueries({ queryKey: ["apostas"] }); },
   });
   const chance = po == null ? null : lado === "over" ? po : 1 - po;
+  const toggle = (t: string) => setTags(tags.includes(t) ? tags.filter((x) => x !== t) : [...tags, t]);
   return (
     <div className="panel"><b>Registrar aposta</b> <span className="muted small">{lado} {line} · chance {chance == null ? "—" : `${Math.round(100 * chance)}%`}</span>
       <div className="row" style={{ marginTop: 8, alignItems: "flex-end" }}>
@@ -234,9 +251,16 @@ function BetForm({ d, mercado, data, line, oo, ou, po }: { d: Detalhe; mercado: 
       <div className="row" style={{ marginTop: 8, alignItems: "flex-end" }}>
         <label className="field">Odd<input className="input" type="number" step={0.01} value={oddLado || ""} onChange={(e) => setOdd(Number(e.target.value))} /></label>
         <label className="field">Casa<input className="input" value={casa} placeholder="opcional" onChange={(e) => setCasa(e.target.value)} /></label>
+      </div>
+      <div className="small muted" style={{ marginTop: 8 }}>Por quê? (diário: mostra quais motivos dão lucro)</div>
+      <div className="tabs" style={{ marginTop: 4 }}>{(meta.data?.etiquetas ?? []).map((t) =>
+        <button key={t} className={`tab ${tags.includes(t) ? "on" : ""}`} onClick={() => toggle(t)}>{t}</button>)}</div>
+      <div className="row" style={{ marginTop: 8, alignItems: "flex-end" }}>
+        <input className="input" style={{ flex: 1, minWidth: 140 }} placeholder="Nota (opcional)" value={obs} onChange={(e) => setObs(e.target.value)} />
         <button className="btn primary" disabled={m.isPending || !(oddLado > 1)} onClick={() => m.mutate()}>{m.isSuccess ? "Registrada ✓" : "Registrar"}</button>
       </div>
-      {m.error && <div className="err small">{String((m.error as Error).message)}</div>}
+      {m.error && !(m.error instanceof LimiteError) && <div className="err small">{String((m.error as Error).message)}</div>}
+      {m.data?.avisos?.length ? <div className="small" style={{ color: "#fcd9b6", marginTop: 6 }}>⚠ {m.data.avisos.join(" ")}</div> : null}
     </div>
   );
 }

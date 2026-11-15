@@ -43,3 +43,9 @@ def test_jogos_da_data_e_box_score(loaded):
     assert casa["totais"]["pts"] == 50 and [p["jogador"] for p in casa["jogadores"]][0] == "Novato Sobe"
     assert casa["nao_jogaram"] == ["Nao Jogou"]
     assert rk.boxscore_game(loaded, 999) is None
+
+
+def test_ranking_sem_lavadas(loaded):
+    # os jogos da fixture terminam 110 x 100: com corte em 10 todos saem; em 11 ficam
+    assert rk.ranking(loaded, 2026, max_margem=10) == []
+    assert len(rk.ranking(loaded, 2026, max_margem=11)) == len(rk.ranking(loaded, 2026))
