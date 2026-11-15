@@ -6,7 +6,7 @@ Legenda: **[P0]** bloqueia o resto · **[P1]** necessário para o MVP ·
 
 ## Estado atual
 
-Atualizado em 2026-11-14 (95 testes). Detalhes do que o site faz no README.
+Atualizado em 2026-11-14 (106 testes). Detalhes do que o site faz no README.
 
 - **Dados**: nba_api validada contra o nba.com (seção 1); duas temporadas na
   base; agenda, injury report oficial (a cada 15 min) e zonas de arremesso.
@@ -16,10 +16,12 @@ Atualizado em 2026-11-14 (95 testes). Detalhes do que o site faz no README.
 - **Site**: página Props dinâmica (tema escuro, abas, barras contra a linha,
   detalhe com linha e odds), Linhas, Matchups (tabela), DvP e as antigas.
 - **Feito por PR**: #1 fonte nba_api · #2 matchups e DvP · #3 fase 1 (dados)
-  · #4 fase 2 (projeção) · fase 3 (linhas e visual) no PR seguinte.
+  · #4 fase 2 (projeção) · #5 fase 3 (linhas e visual) · fase 4 (apostas)
+  no PR seguinte.
 
-**Próximo**: fase 3b (API de odds, depende das casas), fase 4 (registro de
-apostas) e fase 5 (Protocolo BetânIAG, depende do texto do protocolo).
+**Próximo**: fase 5 (Protocolo BetânIAG: texto recebido em 2026-11-14,
+proposta em `docs/decisoes/0008-protocolo-betaniag.md`) e fase 3b (API de
+odds, depende das casas).
 
 ---
 
@@ -139,18 +141,36 @@ ritmo, saldo, desfalques, nota por critério, agenda, telas Matchups e DvP,
 - [ ] 3b. API de odds gravando na tabela `lines`. **Pendente: quais casas**
   (o colega informa).
 
-**Fase 4 — registro de apostas**
-- [ ] 4a. Guardar aposta (jogador, mercado, linha, over/under, odd) e
-  conferir o resultado sozinho; acompanhamento de acerto e retorno.
+**Fase 4 — registro de apostas** (ver `docs/decisoes/0007-registro-de-apostas.md`)
+- [x] 4a. Guardar aposta (jogador, mercado, linha, lado, odd, unidades, casa)
+  com a fotografia do momento (chance, projeção, valor esperado).
+- [x] 4b. Conferência automática depois do jogo (ganha, perdida, devolvida,
+  anulada se não jogou), no `atualizar`, no botão do site e em `nbastats apostas`.
+- [x] 4c. Página Apostas: acerto real x chance média, lucro, ROI, curva e
+  desempenho por mercado, unidades, faixa de chance e lado.
+- [ ] 4d. CLV (closing line value): guardar a linha de fechamento e comparar
+  com a linha apostada. Depende da API de odds (3b).
 
-**Fase 5 — Protocolo BetânIAG**
-- [ ] 5a. Assistente no site: escolher jogo, jogador ou time e pedir a
-  análise do protocolo sobre os dados da base. **Pendente: texto do
-  protocolo** (o usuário envia quando chegarmos aqui).
+**Fase 5 — Protocolo BetânIAG** (análise e proposta em `docs/decisoes/0008-protocolo-betaniag.md`)
+- [x] 5a. Texto do protocolo recebido e analisado.
+- [ ] 5b. **Pendente do colega**: tabela de faixas/cores/níveis (pilar 6),
+  regra de unidades, banca e se quer o relatório com IA.
+- [ ] 5c. Chance do mercado sem a margem da casa e vantagem (nossa chance −
+  mercado) no detalhe.
+- [ ] 5d. Selo BetânIAG nos cartões (cor, nível, unidade sugerida).
+- [ ] 5e. Checklist do protocolo no detalhe e selo "análise validada"
+  (injury report final).
+- [ ] 5f. Página Comparar: jogador × jogador, time × time, tendências.
+- [ ] 5g. (Opcional) Relatório BetânIAG com IA e pergunta livre.
+- [ ] 5h. Gestão de banca: limite por dia/jogo e alerta de apostas
+  correlacionadas.
 
 **Fase 6 — visual**
 - [x] 6a. Primeira versão dinâmica (página Props, fase 3d).
-- [ ] 6b. Ajustes com o uso do colega (celular principalmente).
+- [x] 6b. Props no celular: cartões compactos, abas com rolagem lateral,
+  filtros recolhidos, detalhe enxuto (conferido em 390 px e 1280 px).
+- [ ] 6d. Acesso pelo celular: rede espelhada do WSL ou `portproxy` (passo a
+  passo no README); senha obrigatória antes de abrir para a rede.
 - [ ] 6c. Avaliar outro front (ex.: React) se o Streamlit limitar, junto com
   a ida para o servidor (seção 6).
 

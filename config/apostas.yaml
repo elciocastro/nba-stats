@@ -1,0 +1,11 @@
+# Registro de apostas (metrics/apostas.py).
+
+# Valor de 1 unidade, só para mostrar o lucro em dinheiro além de unidades
+valor_unidade: 10.0
+moeda: "R$"
+
+# Unidades oferecidas no registro (protocolo: 0,5 especulativa, 1 padrão, 2 máxima)
+unidades: [0.5, 1.0, 2.0]
+
+# Jogador que não entrou em quadra: aposta anulada (devolve), como na maioria das casas
+anular_se_nao_jogou: true

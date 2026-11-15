@@ -127,6 +127,19 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--under", type=float, help="odd decimal do under")
     p.add_argument("--data", default=None, help="AAAA-MM-DD (padrão: hoje)")
 
+    p = sub.add_parser("apostar", help="registra aposta: apostar \"Jamal Murray\" pts over 24.5 --odd 1.9")
+    p.add_argument("jogador")
+    p.add_argument("mercado", choices=MATCHUP_STATS)
+    p.add_argument("lado", choices=["over", "under"])
+    p.add_argument("linha", type=float)
+    p.add_argument("--odd", type=float, required=True)
+    p.add_argument("--unidades", type=float, default=1.0)
+    p.add_argument("--casa")
+    p.add_argument("--data", default=None, help="AAAA-MM-DD (padrão: hoje)")
+
+    p = sub.add_parser("apostas", help="confere resultados e mostra o desempenho")
+    p.add_argument("--desde", help="AAAA-MM-DD")
+
     p = sub.add_parser("calibrar", help="recalcula os parâmetros da projeção com os jogos já disputados")
     p.add_argument("season", type=int)
     p.add_argument("--desde", help="AAAA-MM-DD; o começo da temporada tem pouca amostra")
@@ -188,6 +201,10 @@ def main(argv: list[str] | None = None) -> int:
         else:
             print(f"OK: {result['games']} jogos, {result['stats']} linhas, "
                   f"injury report {result['relatorio']} ({result['lesoes']} jogadores)")
+        from .metrics.apostas import load_bet_config, settle_bets
+        done = settle_bets(conn, load_bet_config())
+        if done:
+            print("Apostas conferidas: " + ", ".join(f"{v} {k}" for k, v in done.items()))
 
     elif args.cmd == "matchup":
         day = args.data or date.today().isoformat()
@@ -210,6 +227,47 @@ def main(argv: list[str] | None = None) -> int:
         save_line(conn, day, pl["id"], args.mercado, args.linha, args.over, args.under)
         acao = f"{args.linha:g}" if args.linha is not None else "apagada"
         print(f"{pl['first_name']} {pl['last_name']} · {args.mercado} · {day}: linha {acao}")
+
+    elif args.cmd == "apostar":
+        from .metrics.apostas import add_bet
+        from .metrics.linhas import find_player, prob_over
+        found = find_player(conn, args.jogador)
+        if len(found) != 1:
+            print(f"{len(found)} jogadores com esse nome. Seja mais específico.")
+            return 1
+        pl, day = found[0], args.data or date.today().isoformat()
+        # fotografia do momento: projeção e chance do lado apostado
+        params = load_projection_params()
+        prob = proj = game_id = None
+        for g in matchup_report(conn, day, args.mercado, load_matchup_rules(), params):
+            for p in g["jogadores"]:
+                if p["player_id"] == pl["id"]:
+                    proj, game_id = p.get("proj"), g["jogo"]["id"]
+                    po = prob_over(proj, args.linha, (params.get("mercados") or {}).get(args.mercado) or {})
+                    prob = None if po is None else (po if args.lado == "over" else 1 - po)
+        if game_id is None:
+            print(f"Aviso: nenhum jogo de {pl['first_name']} {pl['last_name']} em {day} na base "
+                  "(confira a data ou rode `nbastats atualizar`). A aposta fica pendente sem chance calculada.")
+        bid = add_bet(conn, day=day, player_id=pl["id"], market=args.mercado, side=args.lado,
+                      line=args.linha, odd=args.odd, units=args.unidades, game_id=game_id,
+                      bookmaker=args.casa, prob=prob, proj=proj)
+        extra = f" · chance {100 * prob:.0f}% · valor esperado {100 * (prob * args.odd - 1):+.1f}%" if prob else ""
+        print(f"Aposta #{bid}: {pl['first_name']} {pl['last_name']} {args.lado} {args.linha:g} "
+              f"{args.mercado} @ {args.odd} ({args.unidades:g} u){extra}")
+
+    elif args.cmd == "apostas":
+        from .metrics.apostas import load_bet_config, performance, settle_bets
+        done = settle_bets(conn, load_bet_config())
+        if done:
+            print("Conferidas agora: " + ", ".join(f"{v} {k}" for k, v in done.items()))
+        perf = performance(conn, since=args.desde)
+        g = perf["geral"]
+        print(f"{g['apostas']} apostas ({g['pendentes']} pendentes) · acerto {g['acerto_pct']}% "
+              f"(chance média {g['chance_media_pct']}%) · lucro {g['lucro_unidades']:+} u · ROI {g['roi_pct']}%")
+        for key in ("mercado", "unidades", "faixa_chance"):
+            print(f"\npor {key}:")
+            _table([{"grupo": k, **v} for k, v in perf[key].items()],
+                   ["grupo", "conferidas", "acerto_pct", "chance_media_pct", "lucro_unidades", "roi_pct"])
 
     elif args.cmd == "calibrar":
         rules, params = load_matchup_rules(args.regras), load_projection_params(args.params)

@@ -17,15 +17,21 @@ zonas de arremesso ────┘                                    ▲
 
 **Site** (`streamlit run src/nbastats/web/app.py`, tema escuro):
 
-- **Props**: lista dinâmica do dia. Abas de mercado, chips dos jogos (com
-  risco de blowout), janela L5/L10/L20/temporada, busca e ordenação. Cada
-  jogador mostra foto, linha, projeção (verde acima da linha, vermelha
-  abaixo), lado e chance, e as barras dos últimos jogos coloridas contra a
-  linha. Ao tocar no jogador abre o detalhe: campo para a linha e as odds,
-  chance de over/under, odd justa, valor esperado, gráfico dos últimos 20
-  jogos, taxa de acerto por janela (casa, fora, contra o adversário), de
-  onde vem a projeção, com e sem o companheiro desfalcado e zonas de
-  arremesso.
+- **Props**: lista do dia em cartões, pensada para o celular. Abas de
+  mercado e chips dos jogos (com risco de blowout) com rolagem lateral,
+  janela L5/L10/L20/temporada e filtros recolhidos. Cada cartão mostra foto,
+  linha, projeção (verde acima da linha, vermelha abaixo), chance e as
+  barras dos últimos jogos coloridas contra a linha. O botão › abre o
+  detalhe: linha e odds, chance de over/under, odd justa, valor esperado,
+  **registrar aposta**, gráfico dos últimos 20 jogos, taxa de acerto por
+  janela (casa, fora, contra o adversário), de onde vem a projeção, com e
+  sem o companheiro desfalcado e zonas de arremesso. No computador há
+  também a visão em tabela (em Filtros).
+- **Apostas**: registro com conferência automática depois do jogo (ganha,
+  perdida, devolvida, anulada se o jogador não entrou). Mostra acerto real
+  contra a chance média calculada, lucro em unidades e em dinheiro, ROI,
+  curva de lucro e desempenho por mercado, por unidades e por faixa de
+  chance.
 - **Linhas**: tabela para digitar várias linhas e odds de uma vez.
 - **Matchups (tabela)**: a mesma análise em tabela, com os critérios da
   anotação do colega (✓/✗) opcionais.
@@ -46,6 +52,7 @@ zonas de arremesso ────┘                                    ▲
 | Blowout | margem esperada (saldo, mando, desfalques) e chance de decisão por 15+ | 0005 |
 | Zonas | de onde o jogador arremessa × o que o adversário cede em cada zona | 0005 |
 | Chance de over | binomial negativa ou normal por mercado, calibrada; quando prevê 40%, deu ~40% | 0006 |
+| Apostas | fotografia do momento (chance, projeção, valor esperado) e conferência automática | 0007 |
 
 ## Instalação
 
@@ -85,6 +92,8 @@ nbastats matchup                      # jogos de hoje, pontos: projeção, DvP, 
 nbastats matchup --stat pra --data 2026-11-13   # data passada mostra o real
 nbastats linha "Jamal Murray" pts 24.5 --over 1.90 --under 1.90
 nbastats linha "Jamal Murray" pts     # sem valor: apaga
+nbastats apostar "Jamal Murray" pts over 24.5 --odd 1.90 --unidades 1 --casa X
+nbastats apostas                      # confere resultados e mostra o desempenho
 nbastats jogo GSW CHI [--data 2026-11-10]
 nbastats ranking 2026 --stat reb
 nbastats potencial 2026
@@ -99,6 +108,43 @@ nbastats backtest 2025 --desde 2025-12-01    # critérios da anotação (ver 000
 
 `calibrar` mede o erro fora da amostra e regrava `config/projecao.yaml`.
 
+### Acessar pelo celular (mesma rede Wi-Fi)
+
+O site roda dentro do WSL, que fica numa rede interna do Windows; por isso
+o celular não alcança o endereço que o Streamlit mostra. Antes de abrir para
+a rede, defina uma senha em `NBASTATS_PASSWORD` no `.env`.
+
+Opção 1, Windows 11 (mais simples): rede espelhada do WSL. Crie
+`%UserProfile%\.wslconfig` com:
+
+```
+[wsl2]
+networkingMode=mirrored
+```
+
+No PowerShell (como administrador): `wsl --shutdown`, depois libere a porta
+no firewall:
+
+```
+New-NetFirewallRule -DisplayName "nba-stats 8501" -Direction Inbound -LocalPort 8501 -Protocol TCP -Action Allow
+```
+
+Suba o site de novo e abra no celular `http://<IP do Windows>:8501`
+(o IP aparece em `ipconfig`, no adaptador Wi-Fi).
+
+Opção 2 (Windows 10 ou sem rede espelhada): redirecionar a porta. No WSL,
+pegue o IP com `hostname -I`; no PowerShell como administrador:
+
+```
+netsh interface portproxy add v4tov4 listenport=8501 listenaddress=0.0.0.0 connectport=8501 connectaddress=<IP do WSL>
+New-NetFirewallRule -DisplayName "nba-stats 8501" -Direction Inbound -LocalPort 8501 -Protocol TCP -Action Allow
+```
+
+O IP do WSL muda quando o Windows reinicia; aí refaça o `portproxy`.
+
+Fora de casa: use uma VPN privada entre os seus aparelhos (ex.: Tailscale),
+em vez de abrir a porta para a internet.
+
 ### Atualização automática (cron no WSL)
 
 ```
@@ -112,6 +158,7 @@ Cada execução fica registrada na tabela `sync_log`.
 
 ```
 config/
+  apostas.yaml             valor da unidade, unidades oferecidas, regra de anulação
   matchup.yaml             critérios do cruzamento, posições, lesões, mercados
   projecao.yaml            parâmetros da projeção (gerado por `nbastats calibrar`)
   potencial.yaml           regras do ranking de potencial
@@ -125,11 +172,12 @@ src/nbastats/
     projecao.py            projeção, margem/blowout, com/sem, calibração
     linhas.py              linhas, chance de over/under, valor esperado, acerto
     zonas.py               zonas de arremesso e encaixe
+    apostas.py             registro, conferência e desempenho das apostas
     queries.py, potencial.py
   web/app.py, web/props.py site Streamlit (só apresentação)
   cli.py                   comando nbastats
 tests/                     pytest com fontes falsas e respostas reais gravadas
-docs/decisoes/             0001 a 0006: decisões, métodos e resultados
+docs/decisoes/             0001 a 0007: decisões, métodos e resultados
 docs/BACKLOG.md            o que foi feito e o que falta, em fases
 ```
 
