@@ -158,6 +158,13 @@ def test_noticias_mudancas_e_retornos(base):
     assert ret[0]["jogos_fora"] == 1 and ret[0]["minutos_antes"] == 28.0 and ret[0]["status"] == "Questionable"
 
 
+def test_noticias_usa_o_time_do_jogador_quando_o_relatorio_nao_traz(base):
+    team = base.execute("SELECT team_id FROM players WHERE id = 11").fetchone()[0]
+    abbr = base.execute("SELECT abbreviation FROM teams WHERE id = ?", (team,)).fetchone()[0]
+    _report(base, 1, "2026-11-07T12:00", [(11, "Beto", None, "Out")])
+    assert noticias.changes(base, "2026-11-07")["mudancas"][0]["time"] == abbr
+
+
 def test_comparacao_de_times_e_tendencias(base):
     tc = comparar.team_compare(base, "2026-11-07", A, C, RULES)
     assert tc["a"]["time"] == "AAA" and tc["a"]["jogos"] == 2 and tc["a"]["pts_feitos"] == 21.5

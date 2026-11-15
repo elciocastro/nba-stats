@@ -205,6 +205,14 @@ ritmo, saldo, desfalques, nota por critério, agenda, telas Matchups e DvP,
 - [x] 7f. **Favoritos**: jogadores, times e jogos (tabela `favorites`),
   filtro "só favoritos" e destaque no Início.
 - [x] 7g. Docker com API + front num contêiner; `deploy/vps.sh` igual.
+- [x] 7h. **Apostas** (registro, conferência automática, acerto × chance,
+  lucro em u e R$, ROI, curva, desempenho por grupo; "Registrar aposta" na
+  página do jogador), **Comparar** (jogador × jogador, time × time com DvP por
+  posição, tendências) e **Notícias** (mudanças no injury report, quem pode
+  voltar com "com X minutos"); botão "Atualizar dados" no topo; no celular,
+  barra inferior com Início, Props, Ao Vivo, Apostas e Mais.
+- [ ] 7i. Levar ao site novo o que ainda só existe no Streamlit: Ranking e
+  Jogo (box score); depois aposentar o Streamlit.
 
 ## 4. Métricas e análises — [P1] [?]
 

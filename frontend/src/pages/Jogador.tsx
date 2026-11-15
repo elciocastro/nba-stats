@@ -6,7 +6,7 @@ import {
   Tooltip, XAxis, YAxis,
 } from "recharts";
 import { createColumnHelper, flexRender, getCoreRowModel, getSortedRowModel, SortingState, useReactTable } from "@tanstack/react-table";
-import { api, Detalhe, JogoLog } from "../api";
+import { api, api2, Detalhe, JogoLog } from "../api";
 import { usePrefs } from "../App";
 import { ddmm, heat, num, pct, Photo, SealBadge, Star, useFavs } from "../components";
 
@@ -179,6 +179,7 @@ function Body({ d, mercado, data }: { d: Detalhe; mercado: string; data: string 
             {ev && <div className="kpi"><div className="l">Valor esp.</div><div className={`v ${ev[1] > 0 ? "over" : "under"}`}>{ev[1] > 0 ? "+" : ""}{(100 * ev[1]).toFixed(1)}%</div><div className="s">no {ev[0]}</div></div>}
             <div className="kpi"><div className="l">DvP</div><div className={`v ${(d.dvp_rank ?? 15) >= 21 ? "over" : (d.dvp_rank ?? 15) <= 10 ? "under" : ""}`}>{d.dvp_rank ?? "—"}º</div><div className="s">30 = cede mais</div></div>
           </div>
+          <BetForm d={d} mercado={mercado} data={data} line={line} oo={oo} ou={ou} po={po} />
           {d.checklist && (
             <div className="panel"><b>Checklist BetânIAG</b>
               <table className="ck" style={{ marginTop: 6 }}><tbody>
@@ -208,6 +209,35 @@ function Body({ d, mercado, data }: { d: Detalhe; mercado: string; data: string 
         </div>
       </div>
     </>
+  );
+}
+
+function BetForm({ d, mercado, data, line, oo, ou, po }: { d: Detalhe; mercado: string; data: string; line: number;
+  oo: number; ou: number; po: number | null }) {
+  const [lado, setLado] = useState<"over" | "under">(po != null && po < 0.5 ? "under" : "over");
+  const [un, setUn] = useState(1);
+  const [odd, setOdd] = useState(0);
+  const [casa, setCasa] = useState(() => { try { return localStorage.getItem("casa") ?? ""; } catch { return ""; } });
+  const qc = useQueryClient();
+  const oddLado = odd || (lado === "over" ? oo : ou);
+  const m = useMutation({
+    mutationFn: () => api2.apostar({ data, player_id: d.player_id, mercado, lado, linha: line, odd: oddLado, unidades: un, casa: casa || undefined }),
+    onSuccess: () => { try { localStorage.setItem("casa", casa); } catch { /* sem storage */ } qc.invalidateQueries({ queryKey: ["apostas"] }); },
+  });
+  const chance = po == null ? null : lado === "over" ? po : 1 - po;
+  return (
+    <div className="panel"><b>Registrar aposta</b> <span className="muted small">{lado} {line} · chance {chance == null ? "—" : `${Math.round(100 * chance)}%`}</span>
+      <div className="row" style={{ marginTop: 8, alignItems: "flex-end" }}>
+        <div className="seg">{(["over", "under"] as const).map((l) => <button key={l} className={l === lado ? "on" : ""} onClick={() => { setLado(l); setOdd(0); }}>{l === "over" ? "Over" : "Under"}</button>)}</div>
+        <div className="seg">{[0.5, 1, 2].map((u) => <button key={u} className={u === un ? "on" : ""} onClick={() => setUn(u)}>{u}u</button>)}</div>
+      </div>
+      <div className="row" style={{ marginTop: 8, alignItems: "flex-end" }}>
+        <label className="field">Odd<input className="input" type="number" step={0.01} value={oddLado || ""} onChange={(e) => setOdd(Number(e.target.value))} /></label>
+        <label className="field">Casa<input className="input" value={casa} placeholder="opcional" onChange={(e) => setCasa(e.target.value)} /></label>
+        <button className="btn primary" disabled={m.isPending || !(oddLado > 1)} onClick={() => m.mutate()}>{m.isSuccess ? "Registrada ✓" : "Registrar"}</button>
+      </div>
+      {m.error && <div className="err small">{String((m.error as Error).message)}</div>}
+    </div>
   );
 }
 

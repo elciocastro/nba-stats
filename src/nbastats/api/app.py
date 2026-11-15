@@ -25,6 +25,9 @@ from nbastats.config import get_settings
 from nbastats.ingest import last_refresh
 from nbastats.metrics import betaniag as bt
 from nbastats.metrics import aovivo as av
+from nbastats.metrics import apostas as ap
+from nbastats.metrics import comparar as cp
+from nbastats.metrics import noticias as nt
 from nbastats.metrics import destaques as dq
 from nbastats.metrics import favoritos as fv
 from nbastats.metrics.comparar import _season_of
@@ -329,6 +332,101 @@ def del_fav(tipo: str, entity_id: int, conn=Depends(get_conn)):
     except ValueError as e:
         raise HTTPException(400, str(e))
     return fv.list_favorites(conn)
+
+
+# ---------- apostas ----------
+
+class Aposta(BaseModel):
+    data: str
+    player_id: int
+    mercado: str
+    lado: str
+    linha: float
+    odd: float
+    unidades: float = 1.0
+    casa: str | None = None
+    obs: str | None = None
+
+
+@app.get("/api/apostas")
+def bets(status: str | None = None, conn=Depends(get_conn)):
+    cfg = ap.load_bet_config()
+    return {"apostas": ap.list_bets(conn, status=status), "desempenho": ap.performance(conn),
+            "config": {k: cfg.get(k) for k in ("valor_unidade", "moeda", "unidades")}}
+
+
+@app.post("/api/apostas")
+def add_bet(body: Aposta, conn=Depends(get_conn)):
+    """Registra com a fotografia do momento: chance e projeção calculadas agora."""
+    if body.mercado not in MARKETS:
+        raise HTTPException(400, "mercado inválido")
+    report = day_report(conn, body.data, body.mercado, last_refresh(conn), None)
+    p = next((p for g in report for p in g["jogadores"] if p["player_id"] == body.player_id), None)
+    prob = proj = None
+    if p is not None:
+        market = (load_projection_params().get("mercados") or {}).get(body.mercado) or {}
+        po = prob_over(p.get("proj"), body.linha, market)
+        prob = None if po is None else (po if body.lado == "over" else 1 - po)
+        proj = p.get("proj")
+    try:
+        bet_id = ap.add_bet(conn, day=body.data, player_id=body.player_id, market=body.mercado, side=body.lado,
+                            line=body.linha, odd=body.odd, units=body.unidades,
+                            game_id=p.get("game_id") if p else None, bookmaker=body.casa, prob=prob, proj=proj,
+                            note=body.obs)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    return {"id": bet_id, "chance": prob}
+
+
+@app.delete("/api/apostas/{bet_id}")
+def del_bet(bet_id: int, conn=Depends(get_conn)):
+    ap.delete_bet(conn, bet_id)
+    return {"ok": True}
+
+
+@app.post("/api/apostas/conferir")
+def settle(conn=Depends(get_conn)):
+    return {"conferidas": ap.settle_bets(conn, ap.load_bet_config())}
+
+
+# ---------- comparar e notícias ----------
+
+@app.get("/api/times")
+def teams(conn=Depends(get_conn)):
+    return [dict(r) for r in conn.execute(
+        "SELECT id, abbreviation AS sigla, full_name AS nome FROM teams WHERE abbreviation IS NOT NULL ORDER BY abbreviation")]
+
+
+@app.get("/api/comparar/times")
+def compare_teams(a: int, b: int, data: str | None = None, conn=Depends(get_conn)):
+    res = cp.team_compare(conn, _day(data), a, b, load_matchup_rules())
+    if not res:
+        raise HTTPException(404, "Sem dados para a data")
+    return res
+
+
+@app.get("/api/tendencias")
+def trends(data: str | None = None, conn=Depends(get_conn)):
+    return cp.trends(conn, _day(data), load_matchup_rules())
+
+
+@app.get("/api/noticias")
+def news(data: str | None = None, conn=Depends(get_conn)):
+    day = _day(data)
+    return {**nt.changes(conn, day), "relatorios": nt.reports_for(conn, day), "retornos": nt.returns(conn, day)}
+
+
+@app.post("/api/atualizar")
+def update(forcar: bool = False, conn=Depends(get_conn)):
+    """Estatísticas recentes, agenda e injury report (como o botão do Streamlit)."""
+    from nbastats.ingest import refresh
+    from nbastats.sources import build_injury_source, build_source
+    try:
+        res = refresh(conn, build_source(settings.fonte, settings), build_injury_source(), force=forcar)
+    except Exception as exc:
+        raise HTTPException(502, f"Falhou: {exc}")
+    ap.settle_bets(conn, ap.load_bet_config())
+    return {**res, "atualizado": last_refresh(conn)}
 
 
 # ---------- ao vivo ----------
