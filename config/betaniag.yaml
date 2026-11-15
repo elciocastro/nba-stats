@@ -1,0 +1,56 @@
+# Protocolo BetânIAG (docs/decisoes/0008 e 0009). Lido por metrics/betaniag.py.
+# Desligado por padrão: liga aqui ou no botão da barra lateral do site (vale só
+# para a sessão).
+habilitado: false
+
+# Selo de cada prop: a primeira faixa cuja chance (do lado favorito, pelo modelo)
+# e cujo valor esperado (quando há odd da casa) são atingidos. Sem odd, conta só
+# a chance. Com odd e valor esperado negativo: "Sem valor".
+# Cores pensadas para destacar as boas: verde forte > verde > âmbar > cinza.
+niveis:
+  - {nome: Forte, cor: "#16a34a", texto: "#ffffff", chance_min: 0.62, ev_min: 0.08}
+  - {nome: Boa, cor: "#4ade80", texto: "#052e16", chance_min: 0.57, ev_min: 0.04}
+  - {nome: Especulativa, cor: "#f59e0b", texto: "#1c1206", chance_min: 0.53, ev_min: 0.0}
+  - {nome: Neutra, cor: "#475569", texto: "#e2e8f0", chance_min: 0.0, ev_min: null}
+sem_valor: {nome: "Sem valor", cor: "#7f1d1d", texto: "#fecaca"}
+# Sem linha da casa (linha "ref" = L10 arredondado, que favorece o under), o
+# selo não passa deste nível.
+linha_ref_max: Especulativa
+
+# Unidade sugerida por nível. Em espera até validar com as casas (registro de
+# apostas): enquanto false, o site não mostra unidade sugerida.
+unidades:
+  habilitado: false
+  por_nivel: {Forte: 2.0, Boa: 1.0, Especulativa: 0.5}
+
+# Selo de validação (pilar 4): "validada" quando o último injury report saiu
+# perto do jogo e nenhum jogador relevante do jogo segue em dúvida.
+validacao:
+  minutos_antes_do_jogo: 90      # relatório publicado a até X min do início
+  min_minutos_l10: 20            # quem conta como relevante
+  status_duvida: [Questionable, Doubtful]
+
+# Alertas no checklist (contexto, não requisito: ver 0008, ponto 4)
+alertas:
+  h2h_min_jogos: 3               # abaixo disso o H2H é só curiosidade
+  l5_contra: true                # avisa quando o L5 vai contra o lado escolhido
+
+# Página inicial: média mínima (L10) para uma prop entrar nos destaques.
+# Abaixo disso as casas nem oferecem a linha (ex.: bolas de 3 de um pivô).
+destaques:
+  min_media: {pts: 10, reb: 4, ast: 3, pra: 15, fg3m: 1.5}
+
+# Esportes: só a NBA está ativa. Os outros ficam preparados para quando houver
+# fonte de dados; o site não mostra esportes inativos.
+esportes:
+  nba: {ativo: true, mercado_foco: pra}
+  futebol: {ativo: false, mercado_foco: null}
+  mma: {ativo: false, mercado_foco: null}
+
+# Relatório com IA (opcional). Desligado: nada é enviado a lugar nenhum.
+# Para ligar: `pip install -e ".[ia]"`, ANTHROPIC_API_KEY no .env e habilitado: true.
+ia:
+  habilitado: false
+  modelo: claude-opus-5-5          # claude-sonnet-5-5 sai pela metade do preço
+  esforco: medium                  # low | medium | high
+  max_tokens: 8000

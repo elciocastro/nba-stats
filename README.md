@@ -17,16 +17,30 @@ zonas de arremesso ────┘                                    ▲
 
 **Site** (`streamlit run src/nbastats/web/app.py`, tema escuro):
 
-- **Props**: lista do dia em cartões, pensada para o celular. Abas de
-  mercado e chips dos jogos (com risco de blowout) com rolagem lateral,
-  janela L5/L10/L20/temporada e filtros recolhidos. Cada cartão mostra foto,
-  linha, projeção (verde acima da linha, vermelha abaixo), chance e as
-  barras dos últimos jogos coloridas contra a linha. O botão › abre o
-  detalhe: linha e odds, chance de over/under, odd justa, valor esperado,
-  **registrar aposta**, gráfico dos últimos 20 jogos, taxa de acerto por
-  janela (casa, fora, contra o adversário), de onde vem a projeção, com e
-  sem o companheiro desfalcado e zonas de arremesso. No computador há
-  também a visão em tabela (em Filtros).
+- **Início**: destaques do dia. Cartões dos jogos (favorito, blowout,
+  ritmo, desfalques, maior chance), melhores oportunidades e jogadores em
+  alta; tocar num jogador abre a página dele.
+- **Props**: no computador, tabela de calor no estilo das planilhas de
+  props (taxa de over na temporada, **H2H**, L5, L10, L20 e temporada
+  anterior; projeção, diferença para a linha, chance, DvP e barras); no
+  celular, cartões compactos. O layout segue o navegador ou a escolha em
+  Preferências. Abas de mercado, chips dos jogos (com risco de blowout),
+  janela e filtros.
+- **Página do jogador** (clique na linha ou ›): linha e odds, chance de
+  over/under, odd justa, valor esperado, **"e se jogar X minutos"**,
+  gráfico grande com valor e adversário em cada barra, janelas e recortes
+  (casa, fora, vitória, derrota, sem descanso), minutos e posses usadas,
+  certas × tentadas, H2H de todas as temporadas, desfalques e com/sem o
+  companheiro, de onde vem a projeção, zonas e **registrar aposta**.
+- **Protocolo BetânIAG** (desligado; liga em Preferências ou no YAML): selo
+  colorido por nível em cada jogador, checklist (chance, odd justa, mercado
+  sem margem, vantagem, valor esperado, L5/L10/H2H, DvP, lesão, validação)
+  e relatório com IA opcional.
+- **Comparar**: jogador × jogador no mesmo mercado, time × time (ritmo,
+  saldo, pontos feitos/cedidos, DvP por posição) e tendências (quem ganhou
+  minutos e uso, defesas que pioraram).
+- **Notícias**: o que mudou entre os dois últimos injury reports e quem
+  pode voltar hoje, com a produção esperada para X minutos.
 - **Apostas**: registro com conferência automática depois do jogo (ganha,
   perdida, devolvida, anulada se o jogador não entrou). Mostra acerto real
   contra a chance média calculada, lucro em unidades e em dinheiro, ROI,
@@ -53,6 +67,8 @@ zonas de arremesso ────┘                                    ▲
 | Zonas | de onde o jogador arremessa × o que o adversário cede em cada zona | 0005 |
 | Chance de over | binomial negativa ou normal por mercado, calibrada; quando prevê 40%, deu ~40% | 0006 |
 | Apostas | fotografia do momento (chance, projeção, valor esperado) e conferência automática | 0007 |
+| BetânIAG | selo por chance e valor esperado, mercado sem margem, validação pelo injury report | 0008, 0009 |
+| H2H | jogador contra o adversário em todas as temporadas da base (contexto) | 0009 |
 
 ## Instalação
 
@@ -63,6 +79,11 @@ python3 -m venv .venv && source .venv/bin/activate
 pip install -e ".[web,nbaapi,injury,dev]"
 cp .env.example .env      # NBASTATS_FONTE; senha do site; chave da BALLDONTLIE se usar
 ```
+
+Relatório com IA (opcional, desligado): `pip install -e ".[ia]"`,
+`ANTHROPIC_API_KEY` no `.env` e `ia.habilitado: true` em
+`config/betaniag.yaml`. O modelo só escreve: recebe os números do site e
+não pode inventar dados. Custa centavos por relatório.
 
 Fontes de dados:
 
@@ -159,6 +180,7 @@ Cada execução fica registrada na tabela `sync_log`.
 ```
 config/
   apostas.yaml             valor da unidade, unidades oferecidas, regra de anulação
+  betaniag.yaml            protocolo (liga/desliga, faixas e cores do selo, validação, IA, esportes)
   matchup.yaml             critérios do cruzamento, posições, lesões, mercados
   projecao.yaml            parâmetros da projeção (gerado por `nbastats calibrar`)
   potencial.yaml           regras do ranking de potencial
@@ -173,11 +195,17 @@ src/nbastats/
     linhas.py              linhas, chance de over/under, valor esperado, acerto
     zonas.py               zonas de arremesso e encaixe
     apostas.py             registro, conferência e desempenho das apostas
+    historico.py           várias temporadas: H2H, janelas, recortes, minutos
+    betaniag.py            selo, mercado sem margem, validação e checklist
+    noticias.py            mudanças no injury report e retornos
+    comparar.py            jogador x jogador, time x time, tendências
+    destaques.py           página inicial: jogos, oportunidades, em alta
     queries.py, potencial.py
-  web/app.py, web/props.py site Streamlit (só apresentação)
+  web/app.py, inicio.py, props.py, comparar.py  site Streamlit (só apresentação)
+  ia.py                    relatório BetânIAG com IA (opcional)
   cli.py                   comando nbastats
 tests/                     pytest com fontes falsas e respostas reais gravadas
-docs/decisoes/             0001 a 0007: decisões, métodos e resultados
+docs/decisoes/             0001 a 0009: decisões, métodos e resultados
 docs/BACKLOG.md            o que foi feito e o que falta, em fases
 ```
 
