@@ -188,13 +188,13 @@ ritmo, saldo, desfalques, nota por critério, agenda, telas Matchups e DvP,
   (Início e Jogador primeiro). Aguardando decisão.
 
 **Fase 7 — API + site novo** (pedido em 2026-11-14, com sugestões do Coni)
-- [ ] 7a. API FastAPI (`src/nbastats/api/`) sobre `metrics/`, sem regra nova:
+- [x] 7a. API FastAPI (`src/nbastats/api/`) sobre `metrics/`, sem regra nova:
   jogos do dia, props por mercado (com linhas), jogador (histórico, H2H,
   janelas, recortes, minutos), destaques, notícias, DvP, linhas (gravar),
   apostas, favoritos.
-- [ ] 7b. Front React (Vite + TypeScript, TanStack Table, gráficos
+- [x] 7b. Front React (Vite + TypeScript, TanStack Table, gráficos
   interativos), servido pela própria API; Streamlit segue até cobrir tudo.
-- [ ] 7c. Início e Jogador primeiro.
+- [x] 7c. Início e Jogador primeiro.
 - [ ] 7d. **Props integrado** (Coni): Props, Linhas, Matchups, DvP, Jogador
   e Potenciais como abas de uma só área, com o mesmo jogo/mercado/filtro.
 - [ ] 7e. **Ao Vivo**: jogos em andamento com placar e, por jogador, o
@@ -203,7 +203,7 @@ ritmo, saldo, desfalques, nota por critério, agenda, telas Matchups e DvP,
   Fonte: placar ao vivo do nba_api (`live` endpoints), a validar.
 - [ ] 7f. **Favoritos**: jogadores, times e jogos (tabela `favorites`),
   filtro "só favoritos" e destaque no Início.
-- [ ] 7g. Docker com API + front num contêiner; `deploy/vps.sh` igual.
+- [x] 7g. Docker com API + front num contêiner; `deploy/vps.sh` igual.
 
 ## 4. Métricas e análises — [P1] [?]
 

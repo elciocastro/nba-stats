@@ -8,7 +8,7 @@
 #   deploy/vps.sh senha     [root@IP]   # mostra a senha do site (gerada na VPS)
 #
 # Variáveis: VPS (padrão root@45.159.173.222), SSH_KEY (~/.ssh/netsentinel-vps),
-# PORTA (8501). A senha é gerada na VPS na primeira subida e fica em
+# PORTA (8100, site novo) e PORTA_ANTIGO (8501, Streamlit; vazio = não sobe). A senha é gerada na VPS na primeira subida e fica em
 # /opt/nba-stats/.env; nunca sai da VPS nem vai para o Git.
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -16,7 +16,8 @@ cd "$(dirname "$0")/.."
 ACAO="${1:-subir}"
 VPS="${2:-${VPS:-root@45.159.173.222}}"
 KEY="${SSH_KEY:-$HOME/.ssh/netsentinel-vps}"
-PORTA="${PORTA:-8501}"
+PORTA="${PORTA:-8100}"
+PORTA_ANTIGO="${PORTA_ANTIGO-8501}"
 DIR=/opt/nba-stats
 r() { ssh -i "$KEY" -o BatchMode=yes "$VPS" "$@"; }
 
@@ -30,12 +31,20 @@ copiar_dados() {
 }
 
 reiniciar() {
-  r "docker rm -f nba-stats >/dev/null 2>&1 || true
+  r "docker rm -f nba-stats nba-stats-antigo >/dev/null 2>&1 || true
      docker run -d --name nba-stats --restart unless-stopped --memory 512m --cpus 0.5 \
-       -p $PORTA:8501 --env-file $DIR/.env -v $DIR/data:/app/data nba-stats:atual >/dev/null
-     for i in \$(seq 40); do curl -sf localhost:$PORTA/_stcore/health >/dev/null && break; sleep 1; done
-     docker ps --filter name=nba-stats --format '{{.Status}}'"
-  echo "No ar: http://${VPS#*@}:$PORTA  (senha: deploy/vps.sh senha)"
+       -p $PORTA:8000 --env-file $DIR/.env -v $DIR/data:/app/data nba-stats:atual >/dev/null
+     if [ -n '$PORTA_ANTIGO' ]; then
+       docker run -d --name nba-stats-antigo --restart unless-stopped --memory 384m --cpus 0.5 \
+         -p $PORTA_ANTIGO:8501 --env-file $DIR/.env -v $DIR/data:/app/data nba-stats:atual \
+         streamlit run src/nbastats/web/app.py --server.address=0.0.0.0 --server.headless=true \
+         --browser.gatherUsageStats=false >/dev/null
+     fi
+     for i in \$(seq 60); do curl -sf localhost:$PORTA/api/saude >/dev/null && break; sleep 1; done
+     docker ps --filter name=nba-stats --format '{{.Names}} {{.Status}}'"
+  echo "Site novo: http://${VPS#*@}:$PORTA"
+  [ -n "$PORTA_ANTIGO" ] && echo "Site antigo: http://${VPS#*@}:$PORTA_ANTIGO"
+  echo "Senha: deploy/vps.sh senha"
 }
 
 case "$ACAO" in
@@ -50,7 +59,7 @@ case "$ACAO" in
     reiniciar ;;
   dados) copiar_dados; reiniciar ;;
   desativar)
-    r "docker rm -f nba-stats >/dev/null 2>&1 || true; docker rmi nba-stats:atual nba-stats:teste >/dev/null 2>&1 || true; rm -rf $DIR"
+    r "docker rm -f nba-stats nba-stats-antigo >/dev/null 2>&1 || true; docker rmi nba-stats:atual nba-stats:teste >/dev/null 2>&1 || true; rm -rf $DIR"
     echo "Desativado em $VPS." ;;
   senha) r "cut -d= -f2- $DIR/.env" ;;
   *) sed -n '2,12p' "$0"; exit 1 ;;
