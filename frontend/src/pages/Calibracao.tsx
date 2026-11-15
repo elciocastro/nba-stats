@@ -17,7 +17,7 @@ export default function Calibracao() {
   const bt = c.backtest[0];
   return (
     <>
-      <h1>Calibração</h1>
+      <h1>Conferência das estatísticas</h1>
       <p className="muted" style={{ maxWidth: 820, marginTop: 0 }}>
         Quando o site diz que um lado tem 60% de chance, ele deveria acertar perto de 60% das vezes, nem mais, nem menos.
         Aqui está a conta honesta, por faixa de chance. Barras parecidas = número confiável; acerto abaixo da chance = site otimista.

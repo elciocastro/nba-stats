@@ -276,6 +276,17 @@ ritmo, saldo, desfalques, nota por critério, agenda, telas Matchups e DvP,
   do jogador, minutos × produção, calibração por mercado, curva de lucro
   com a banca. Escolher com o colega.
 
+**Fase 11 — página inicial e organização** (ver `docs/decisoes/0013-pagina-inicial-e-organizacao.md`)
+- [x] 11a. Página inicial com a liga: última rodada, destaques (Game Score),
+  classificação, líderes, manchetes (ESPN) e transações (NBA, em português).
+- [x] 11b. Início carrega a liga na hora e o "Hoje" à parte; páginas sob demanda.
+- [x] 11c. "Notícias" → **Lesões**; Calibração → **Conferência das
+  estatísticas** (fora do menu principal).
+- [x] 11d. Login com quadra ao fundo e bola animada.
+- [x] 11e. CI sem o aviso de Node 20 (actions v7, Node 24).
+- [ ] 11f. Avaliar com o colega onde mais cabem gráficos e estatísticas (10d).
+- [ ] 11g. Manchetes em português, se aparecer uma fonte boa.
+
 ## 4. Métricas e análises — [P1] [?]
 
 Dependem do item 2.3. Candidatas:

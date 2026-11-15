@@ -1,9 +1,10 @@
 from datetime import date
 
 from .balldontlie import BallDontLie
-from .base import DataSource, InjurySource
+from .base import DataSource, InjurySource, NewsSource
 from .injury_report import NbaInjuryReport
 from .nba_api_source import NbaApiSource, season_of
+from .noticias import NbaNewsFeed
 
 FONTES = ("nba_api", "balldontlie")
 
@@ -22,7 +23,13 @@ def build_injury_source(day: date | None = None) -> InjurySource:
     return NbaInjuryReport(season_of((day or date.today()).isoformat()))
 
 
+def build_news_source() -> NewsSource:
+    """Manchetes (ESPN) e transações (NBA)."""
+    return NbaNewsFeed()
+
+
 __all__ = [
-    "DataSource", "InjurySource", "BallDontLie", "NbaApiSource", "NbaInjuryReport",
+    "DataSource", "InjurySource", "NewsSource", "NbaNewsFeed", "build_news_source",
+    "BallDontLie", "NbaApiSource", "NbaInjuryReport",
     "FONTES", "build_source", "build_injury_source",
 ]

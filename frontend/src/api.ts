@@ -202,7 +202,8 @@ export const api2 = {
   compararTimes: (a: number, b: number, data: string) => j<{ temporada: number; liga_ritmo: number; a: TeamSide; b: TeamSide }>(`/api/comparar/times?a=${a}&b=${b}&data=${data}`),
   tendencias: (data: string) => j<{ minutos: Trend[]; minutos_queda: Trend[]; uso: Trend[];
     defesas: { time: string; grupo: string; pra_temporada: number; pra_recente: number; dif: number; rank_recente: number }[] }>(`/api/tendencias?data=${data}`),
-  noticias: (data: string) => j<Noticias>(`/api/noticias?data=${data}`),
+  lesoes: (data: string) => j<Noticias>(`/api/lesoes?data=${data}`),
+  liga: (data: string) => j<Liga>(`/api/liga?data=${data}`),
   atualizar: (forcar = false) => j<{ pulado: boolean; minutos?: number; relatorio?: string | null }>(`/api/atualizar?forcar=${forcar}`, { method: "POST" }),
 };
 
@@ -281,3 +282,23 @@ export const config = {
   restaurar: (arquivo: string, caminho: string) =>
     call<{ ok: boolean }>(`/api/admin/config?arquivo=${arquivo}&caminho=${encodeURIComponent(caminho)}`, { method: "DELETE" }),
 };
+
+// ---------- panorama da liga (página inicial) ----------
+export type Cestinha = { player_id: number; jogador: string; pts: number; reb: number; ast: number };
+export type Resultado = { game_id: number; casa: string; fora: string; casa_id: number; fora_id: number;
+  placar_casa: number; placar_fora: number; vencedor: string; margem: number;
+  cestinha_casa: Cestinha | null; cestinha_fora: Cestinha | null };
+export type Atuacao = { player_id: number; jogador: string; time: string; team_id: number; adversario: string; game_id: number;
+  venceu: boolean | null; min: number; pts: number; reb: number; ast: number; fg3m: number; stl: number; blk: number;
+  fgm: number; fga: number; game_score: number; marcas: string[] };
+export type Classif = { team_id: number; time: string; nome: string; v: number; d: number; pct: number | null; ult10: string;
+  sequencia: string; pos: number; atras: string; zona: "playoff" | "play-in" | null };
+export type Manchete = { id: string; publicado: string | null; tipo: string | null; titulo: string; resumo: string | null;
+  url: string; imagem: string | null; times: string[] };
+export type Transacao = { id: string; data: string; tipo: string; times: string[];
+  jogadores: { player_id: number; jogador: string }[]; linhas: string[] };
+export type Liga = { data: string; rodada: string | null; resultados: Resultado[]; destaques: Atuacao[];
+  classificacao: { East: Classif[]; West: Classif[] };
+  lideres: { min_jogos: number; categorias: Record<string, { nome: string; jogadores: { player_id: number; jogador: string; time: string; jogos: number; media: number }[] }> };
+  noticias: Manchete[]; transacoes: Transacao[] };
+export const teamLogo = (id: number) => `https://cdn.nba.com/logos/nba/${id}/global/L/logo.svg`;

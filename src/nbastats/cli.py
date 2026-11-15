@@ -31,7 +31,7 @@ from .metrics import (
     rank_potenciais,
     save_projection_params,
 )
-from .sources import FONTES, build_injury_source, build_source
+from .sources import FONTES, build_injury_source, build_news_source, build_source
 
 
 def _table(rows: list[dict], cols: list[str], limit: int = 25) -> None:
@@ -119,6 +119,7 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("sync-agenda", help="grava os jogos agendados de hoje e amanhã")
     p.add_argument("--dias", type=int, default=2, help="quantos dias a partir de hoje")
 
+    sub.add_parser("noticias", help="grava as manchetes (ESPN) e as transações da temporada (NBA)")
     p = sub.add_parser("lesoes", help="grava o injury report oficial mais recente")
 
     p = sub.add_parser("atualizar",
@@ -231,6 +232,11 @@ def main(argv: list[str] | None = None) -> int:
         result = sync_schedule(conn, source, _next_days(args.dias))
         print(f"Agenda: {result['games']} jogos")
 
+    elif args.cmd == "noticias":
+        from .ingest import sync_news
+        result = sync_news(conn, build_news_source())
+        print(f"Manchetes: {result['noticias']} · transações: {result['transacoes']}")
+
     elif args.cmd == "lesoes":
         result = sync_injuries(conn, build_injury_source())
         print(f"Injury report {result.get('report')}: {result['injuries']} jogadores, "
@@ -239,7 +245,7 @@ def main(argv: list[str] | None = None) -> int:
     elif args.cmd == "atualizar":
         source = build_source(args.fonte or settings.fonte, settings)
         result = refresh(conn, source, build_injury_source(),
-                         min_interval_min=args.intervalo, force=args.forcar)
+                         min_interval_min=args.intervalo, force=args.forcar, news_source=build_news_source())
         if result["pulado"]:
             print(f"Já atualizado há {result['minutos']} min ({result['ultima']} UTC). "
                   "Use --forcar para refazer.")

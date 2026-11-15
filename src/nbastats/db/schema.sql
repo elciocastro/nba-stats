@@ -248,3 +248,28 @@ CREATE TABLE IF NOT EXISTS shot_zones_daily (
     fgm         REAL, fga REAL
 );
 CREATE INDEX IF NOT EXISTS idx_zones_daily ON shot_zones_daily (date, season, kind, entity_id);
+
+-- Manchetes da liga (ESPN) e movimentações de jogadores (NBA), para a página inicial.
+CREATE TABLE IF NOT EXISTS news (
+    id            TEXT PRIMARY KEY,
+    published_at  TEXT,               -- ISO UTC
+    tipo          TEXT,               -- Story, Recap, Preview, HeadlineNews, Media
+    titulo        TEXT NOT NULL,
+    resumo        TEXT,
+    url           TEXT,
+    imagem        TEXT,
+    times         TEXT,               -- JSON: nomes dos times citados
+    fetched_at    TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_news_published ON news (published_at);
+
+CREATE TABLE IF NOT EXISTS transactions (
+    id          TEXT PRIMARY KEY,
+    date        TEXT NOT NULL,        -- AAAA-MM-DD
+    tipo        TEXT,                 -- Signing, Waive, Trade, ContractConverted, AwardOnWaivers
+    team_id     INTEGER,
+    player_id   INTEGER,
+    grupo       TEXT,                 -- mesma troca = mesmo grupo
+    descricao   TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions (date);

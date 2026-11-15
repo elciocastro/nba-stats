@@ -233,3 +233,11 @@ def test_favoritos_por_usuario():
     fv.remove_favorite(c, "jogador", 2, user_id=7)
     assert fv.list_favorites(c, 7)["jogador"] == []                              # não recopia
     assert {f["entity_id"] for f in fv.list_favorites(c, todos=True)["jogador"]} == {1}
+
+
+def test_liga_e_lesoes(client):
+    d = client.get("/api/liga", params={"data": "2026-11-07"}).json()
+    assert {"rodada", "resultados", "destaques", "classificacao", "lideres", "noticias", "transacoes"} <= set(d)
+    assert d["rodada"] and d["resultados"] and set(d["classificacao"]) == {"East", "West"}
+    les = client.get("/api/lesoes", params={"data": "2026-11-07"}).json()
+    assert les == client.get("/api/noticias", params={"data": "2026-11-07"}).json()

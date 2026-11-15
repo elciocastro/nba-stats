@@ -1,19 +1,19 @@
-import { createContext, useContext, useState } from "react";
+import { createContext, lazy, Suspense, useContext, useState } from "react";
 import { QueryClient, QueryClientProvider, useMutation, useQuery } from "@tanstack/react-query";
-import { BrowserRouter, NavLink, Route, Routes, useLocation } from "react-router-dom";
+import { BrowserRouter, Navigate, NavLink, Route, Routes, useLocation } from "react-router-dom";
 import { api, api2, Meta, Modo, SenhaError } from "./api";
 import Inicio from "./pages/Inicio";
-import JogadorPage from "./pages/Jogador";
-import Props from "./pages/Props";
-import AoVivo from "./pages/AoVivo";
-import Apostas from "./pages/Apostas";
-import Comparar from "./pages/Comparar";
-import Noticias from "./pages/Noticias";
-import Ranking from "./pages/Ranking";
-import Jogos from "./pages/Jogos";
-import Admin from "./pages/Admin";
-import Calibracao from "./pages/Calibracao";
-import { BotaoTema, Logo, Site, useMarca } from "./marca";
+const JogadorPage = lazy(() => import("./pages/Jogador"));
+const Props = lazy(() => import("./pages/Props"));
+const AoVivo = lazy(() => import("./pages/AoVivo"));
+const Apostas = lazy(() => import("./pages/Apostas"));
+const Comparar = lazy(() => import("./pages/Comparar"));
+const Lesoes = lazy(() => import("./pages/Lesoes"));
+const Ranking = lazy(() => import("./pages/Ranking"));
+const Jogos = lazy(() => import("./pages/Jogos"));
+const Admin = lazy(() => import("./pages/Admin"));
+const Calibracao = lazy(() => import("./pages/Calibracao"));
+import { BolaQuicando, BotaoTema, Logo, Site, useMarca } from "./marca";
 
 type Prefs = { data: string; setData: (d: string) => void; betaniag: boolean; setBetaniag: (b: boolean) => void };
 const Ctx = createContext<Prefs>(null!);
@@ -34,13 +34,16 @@ function Login({ modo, onOk, site }: { modo: Modo; onOk: () => void; site?: Site
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   return (
-    <form className="login" onSubmit={async (e) => {
+    <div className="login-bg">
+    <Quadra />
+    <form className="login cartao" onSubmit={async (e) => {
       e.preventDefault();
       setBusy(true);
       try { await api.login(login, s); onOk(); } catch (x) { setErr((x as Error).message); } finally { setBusy(false); }
     }}>
-      <h1 className="brand" style={{ gap: 8 }}><Logo size={34} /> {site?.nome ?? "NBA Stats"}</h1>
-      {site?.subtitulo && <p className="muted small" style={{ margin: "-4px 0 4px" }}>{site.subtitulo}</p>}
+      <BolaQuicando />
+      <h1 className="brand" style={{ gap: 8, justifyContent: "center" }}>{site?.nome ?? "NBA Stats"}</h1>
+      {site?.subtitulo && <p className="muted small" style={{ margin: "-4px 0 4px", textAlign: "center" }}>{site.subtitulo}</p>}
       {modo === "usuarios" && <input className="input" placeholder="Login" value={login} autoFocus autoComplete="username"
         autoCapitalize="none" onChange={(e) => setLogin(e.target.value)} />}
       <input className="input" type="password" placeholder="Senha" value={s} autoFocus={modo !== "usuarios"}
@@ -48,6 +51,23 @@ function Login({ modo, onOk, site }: { modo: Modo; onOk: () => void; site?: Site
       <button className="btn primary" disabled={busy}>Entrar</button>
       {err && <div className="err">{err}</div>}
     </form>
+    </div>
+  );
+}
+
+/** Meia quadra desenhada atrás do login (linhas finas na cor de destaque). */
+function Quadra() {
+  return (
+    <svg className="quadra" viewBox="0 0 500 470" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+      <g fill="none" stroke="currentColor" strokeWidth="2">
+        <rect x="10" y="10" width="480" height="450" />
+        <rect x="170" y="10" width="160" height="190" />
+        <circle cx="250" cy="200" r="60" />
+        <path d="M30 10 V150 A220 220 0 0 0 470 150 V10" />
+        <path d="M220 52 H280" /><circle cx="250" cy="62" r="8" />
+        <path d="M190 460 A60 60 0 0 1 310 460" />
+      </g>
+    </svg>
   );
 }
 
@@ -97,13 +117,12 @@ function Shell() {
         <nav className="nav">
           <NavLink to="/" end>Início</NavLink>
           <NavLink to="/props">Props</NavLink>
+          <NavLink to="/lesoes">Lesões</NavLink>
           <NavLink to="/aovivo">Ao Vivo</NavLink>
           <NavLink to="/apostas">Apostas</NavLink>
           <NavLink to="/comparar">Comparar</NavLink>
-          <NavLink to="/noticias">Notícias</NavLink>
           <NavLink to="/ranking">Ranking</NavLink>
           <NavLink to="/jogos">Jogos</NavLink>
-          <NavLink to="/calibracao">Calibração</NavLink>
         </nav>
         <span className="sp" />
         <Atualizar />
@@ -114,6 +133,7 @@ function Shell() {
       </header>
       {m?.alerta && <div className="alerta">⚠ {m.alerta}</div>}
       <main className="main">
+        <Suspense fallback={<div className="carregando"><BolaQuicando size={30} />Carregando…</div>}>
         <Routes>
           <Route path="/" element={<Inicio />} />
           <Route path="/jogador/:id" element={<JogadorPage />} />
@@ -121,15 +141,18 @@ function Shell() {
           <Route path="/aovivo" element={<AoVivo />} />
           <Route path="/apostas" element={<Apostas />} />
           <Route path="/comparar" element={<Comparar />} />
-          <Route path="/noticias" element={<Noticias />} />
+          <Route path="/lesoes" element={<Lesoes />} />
+          <Route path="/noticias" element={<Navigate to="/lesoes" replace />} />
           <Route path="/ranking" element={<Ranking />} />
           <Route path="/jogos" element={<Jogos />} />
           <Route path="/jogos/:id" element={<Jogos />} />
-          <Route path="/calibracao" element={<Calibracao />} />
+          <Route path="/conferencia" element={<Calibracao />} />
+          <Route path="/calibracao" element={<Navigate to="/conferencia" replace />} />
           <Route path="/admin" element={m ? <Admin meta={m} /> : null} />
           <Route path="/conta" element={<TrocarSenha onOk={() => null} />} />
           <Route path="/mais" element={<Mais meta={m} />} />
         </Routes>
+        </Suspense>
       </main>
       <nav className="bottom">
         <NavLink to="/" end><b>⌂</b>Início</NavLink>
@@ -151,6 +174,7 @@ function Conta({ meta }: { meta: Meta }) {
       <summary title={u ? `${u.nome} (${u.papel})` : "Conta"}>{u ? u.nome.slice(0, 1).toUpperCase() : "⚙"}</summary>
       <div className="menu" onClick={(e) => { (e.currentTarget.closest("details") as HTMLDetailsElement).open = false; }}>
         {u && <div className="muted small" style={{ padding: "4px 10px" }}>{u.nome} · {u.papel}</div>}
+        <NavLink to="/conferencia">Conferência das estatísticas</NavLink>
         {podeAdmin(meta) && <NavLink to="/admin">Administração</NavLink>}
         {u && <NavLink to="/conta">Trocar senha</NavLink>}
         {meta.modo !== "aberto" && <a href="#" onClick={(e) => { e.preventDefault(); sair(); }}>Sair</a>}
@@ -171,16 +195,16 @@ function Atualizar() {
 
 function MaisLink() {
   const { pathname } = useLocation();
-  const on = ["/mais", "/comparar", "/noticias", "/ranking", "/jogos", "/calibracao", "/admin", "/conta"].some((p) => pathname.startsWith(p));
+  const on = ["/mais", "/comparar", "/lesoes", "/ranking", "/jogos", "/conferencia", "/admin", "/conta"].some((p) => pathname.startsWith(p));
   return <NavLink to="/mais" className={on ? "active" : ""}><b>⋯</b>Mais</NavLink>;
 }
 
 function Mais({ meta }: { meta?: Meta }) {
-  const items = [["/comparar", "⇄", "Comparar", "Jogador × jogador, time × time e tendências"],
-                 ["/noticias", "✚", "Notícias", "Mudanças no injury report e quem pode voltar"],
+  const items = [["/lesoes", "✚", "Lesões", "Injury report, efeito cascata e quem pode voltar"],
+                 ["/comparar", "⇄", "Comparar", "Jogador × jogador, time × time e tendências"],
                  ["/ranking", "≡", "Ranking", "Médias, últimos jogos, por 36 min e arremesso"],
                  ["/jogos", "▦", "Jogos", "Box score completo de cada jogo"],
-                 ["/calibracao", "◎", "Calibração", "Quando o site disse X%, quanto acertou"]];
+                 ["/conferencia", "◎", "Conferência", "Quando o site disse X%, quanto acertou"]];
   if (meta && podeAdmin(meta)) items.push(["/admin", "⚙", "Administração", "Usuários, acessos, carga e backup"]);
   if (meta?.usuario) items.push(["/conta", "🔑", "Trocar senha", meta.usuario.nome]);
   return (
