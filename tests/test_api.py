@@ -241,3 +241,24 @@ def test_liga_e_lesoes(client):
     assert d["rodada"] and d["resultados"] and set(d["classificacao"]) == {"East", "West"}
     les = client.get("/api/lesoes", params={"data": "2026-11-07"}).json()
     assert les == client.get("/api/noticias", params={"data": "2026-11-07"}).json()
+
+
+def test_jogador_sem_jogo_na_data_mostra_o_perfil(client):
+    # 2026-12-25: nenhum jogo na base pequena
+    d = client.get("/api/jogador/10", params={"data": "2026-12-25", "mercado": "pts"}).json()
+    assert d["sem_jogo"] is True and d["jogador"] == "Ana" and d["time"] == "AAA"
+    assert d["proj"] is None and d["jogo"] is None and d["log"] and d["janelas"]
+    assert d["linha_ref"] is True and d["linha"] == int(d["l10"]) + 0.5
+    assert d["proximo_jogo"] is None
+
+
+def test_perfil_usa_a_transacao_mais_recente(base):  # noqa: F811
+    from nbastats.metrics import historico as hs
+    base.execute("INSERT INTO transactions (id, date, tipo, team_id, player_id, descricao)"
+                 " VALUES ('t1', '2026-12-01', 'Signing', 3, 10, 'x')")
+    p = hs.player_profile(base, 10, "2026-12-25", "pts")
+    assert p["time_id"] == 3 and p["time"] == "CCC" and p["ultima_transacao"]["tipo"] == "Signing"
+    base.execute("INSERT INTO transactions (id, date, tipo, team_id, player_id, descricao)"
+                 " VALUES ('t2', '2026-12-10', 'Waive', 3, 10, 'x')")
+    p = hs.player_profile(base, 10, "2026-12-25", "pts")
+    assert p["sem_time"] is True and p["time"] is None and p["proximo_jogo"] is None

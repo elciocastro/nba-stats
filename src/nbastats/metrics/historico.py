@@ -193,7 +193,55 @@ def attach_history(report: list[dict[str, Any]], conn: sqlite3.Connection | None
     return report
 
 
+def player_profile(conn: sqlite3.Connection, player_id: int, day: str, stat: str) -> dict[str, Any] | None:
+    """Jogador sem jogo na data: histórico, janelas contra a linha de
+    referência (L10 arredondado) e o próximo jogo do time. None se não existe."""
+    from .linhas import reference_line  # evita import circular
+    p = conn.execute("""SELECT p.id, p.first_name, p.last_name, p.position, p.team_id, t.abbreviation AS time
+                        FROM players p LEFT JOIN teams t ON t.id = p.team_id WHERE p.id = ?""", (player_id,)).fetchone()
+    if p is None:
+        return None
+    log = player_logs(conn, [player_id], day).get(player_id, [])
+    season = log[0]["season"] if log else conn.execute(
+        "SELECT MAX(season) FROM games WHERE date <= ?", (day,)).fetchone()[0]
+    team_id = log[0]["team_id"] if log else p["team_id"]
+    # contratado, trocado ou dispensado depois do último jogo: vale a transação
+    tx = conn.execute("""SELECT tipo, team_id, date FROM transactions WHERE player_id = ? AND date > ?
+                         ORDER BY date DESC LIMIT 1""", (player_id, log[0]["date"] if log else "")).fetchone()
+    sem_time = False
+    if tx is not None:
+        if tx["tipo"] == "Waive":
+            team_id, sem_time = None, True
+        elif tx["team_id"]:
+            team_id = tx["team_id"]
+    cur = [g for g in log if g["season"] == season]
+    l5, l10 = ([round(mean(g[stat] for g in cur[:n]), 1) if cur else None for n in (5, 10)])
+    linha = reference_line(l10)
+    nxt = conn.execute("""
+        SELECT g.date, g.status, g.home_team_id, h.abbreviation AS casa, v.abbreviation AS fora
+        FROM games g JOIN teams h ON h.id = g.home_team_id JOIN teams v ON v.id = g.visitor_team_id
+        WHERE (g.home_team_id = ? OR g.visitor_team_id = ?) AND g.date >= ? AND g.home_team_score IS NULL
+        ORDER BY g.date LIMIT 1""", (team_id, team_id, day)).fetchone() if team_id else None
+    time = None if sem_time else p["time"]
+    if team_id and team_id != p["team_id"]:
+        time = conn.execute("SELECT abbreviation FROM teams WHERE id = ?", (team_id,)).fetchone()[0]
+    return {
+        "player_id": player_id, "jogador": f"{p['first_name'] or ''} {p['last_name'] or ''}".strip(),
+        "time": time, "time_id": team_id, "grupo": p["position"], "temporada_atual": season,
+        "linha": linha, "linha_ref": linha is not None, "l5": l5, "l10": l10,
+        "temporada": round(mean(g[stat] for g in cur), 1) if cur else None,
+        "min_l5": round(mean(g["minutes"] for g in cur[:5]), 1) if cur else None,
+        "min_l10": round(mean(g["minutes"] for g in cur[:10]), 1) if cur else None,
+        "jogos": len(cur), "historico_total": log, "sem_time": sem_time,
+        "ultima_transacao": None if tx is None else {"tipo": tx["tipo"], "data": tx["date"]},
+        "janelas": windows(log, stat, linha, None, season),
+        "proximo_jogo": None if nxt is None else {
+            "data": nxt["date"], "status": nxt["status"], "em_casa": nxt["home_team_id"] == team_id,
+            "adversario": nxt["fora"] if nxt["home_team_id"] == team_id else nxt["casa"]},
+    }
+
+
 __all__ = [
-    "SPLITS", "MATCHUP_STATS", "attach_history", "h2h_games", "minutes_profile", "player_logs",
+    "SPLITS", "MATCHUP_STATS", "attach_history", "h2h_games", "minutes_profile", "player_logs", "player_profile",
     "scale_to_minutes", "season_label", "split", "windows",
 ]

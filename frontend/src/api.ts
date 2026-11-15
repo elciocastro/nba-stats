@@ -41,8 +41,13 @@ export type JogoLog = {
   minutes: number; usadas: number; [stat: string]: number | string | boolean | null;
 };
 
-export type Detalhe = Jogador & {
-  jogo: Jogo; temporada_atual: number; rotulos: { atual: string; anterior: string };
+export type Detalhe = Omit<Jogador, "adversario"> & {
+  adversario: string | null;
+  jogo: Jogo | null;
+  /** sem jogo na data: perfil sem projeção (vindo do Ranking, das transações...) */
+  sem_jogo?: boolean; sem_time?: boolean;
+  proximo_jogo?: { data: string; status: string | null; em_casa: boolean; adversario: string } | null;
+  ultima_transacao?: { tipo: string; data: string } | null; temporada_atual: number; rotulos: { atual: string; anterior: string };
   proj_detalhe: { valor: number; base: number; minutos: number; f_dvp: number; f_ritmo: number;
                   f_ajuste: number; ausencia: number; erro_tipico: number | null } | null;
   com_sem: { companheiro: string; com: number | null; jogos_com: number; sem: number | null; jogos_sem: number }[] | null;

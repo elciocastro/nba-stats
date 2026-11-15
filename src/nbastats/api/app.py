@@ -327,7 +327,7 @@ def jogador(player_id: int, data: str | None = None, mercado: str = "pts",
     report = day_report(conn, day, mercado, last_refresh(conn), cfg)
     found = next(((g, p) for g in report for p in g["jogadores"] if p["player_id"] == player_id), None)
     if not found:
-        raise HTTPException(404, "Jogador sem jogo/projeção nesta data")
+        return _player_without_game(conn, player_id, day, mercado)
     g, p = found
     abbr = _abbr(conn)
     season = g["jogo"]["season"]
@@ -353,6 +353,38 @@ def jogador(player_id: int, data: str | None = None, mercado: str = "pts",
                      for x in hs.player_logs(conn, [player_id], day, playoffs=True).get(player_id, [])],
     })
     return out
+
+
+def _log_rows(log: list[dict[str, Any]], abbr: dict[int, str], medias: dict[str, float], mercado: str,
+              linha: float | None) -> list[dict[str, Any]]:
+    return [{**{k: x.get(k) for k in LOG_FIELDS}, "adv": abbr.get(x["opp_id"], ""),
+             "faixas": {k: hs.band(x[k], linha if k == mercado else medias.get(k)) for k in medias}} for x in log]
+
+
+def _player_without_game(conn, player_id: int, day: str, mercado: str) -> dict[str, Any]:
+    """Página do jogador quando ele não joga na data (vindo do Ranking, das
+    transações...): histórico e médias, sem projeção nem linha da casa."""
+    p = hs.player_profile(conn, player_id, day, mercado)
+    if p is None:
+        raise HTTPException(404, "Jogador não encontrado")
+    abbr = _abbr(conn)
+    season = p["temporada_atual"]
+    log = p.pop("historico_total")
+    medias = hs.season_averages(log, season, ("minutes", "pts", "reb", "ast", "pra", "fg3m", "stl", "blk", mercado))
+    playoffs = hs.player_logs(conn, [player_id], day, playoffs=True).get(player_id, [])
+    vals = [x for x in log if x["season"] == season][:20]
+    return {
+        **p, "sem_jogo": True, "adversario": None, "game_id": None, "posicao_est": None, "lesao": None,
+        "lesao_motivo": None, "odd_over": None, "odd_under": None, "proj": None, "diff": None, "p_over": None,
+        "p_under": None, "ev": None, "lado": None, "chance": None, "usg_l5": None, "usg_l10": None, "dvp_rank": None,
+        "dvp_rec_rank": None, "selo": None, "proj_vs_l10": None, "encaixe_zonas": None, "com_sem": None,
+        "fora_ultimo_jogo": None, "real": None, "jogo": None, "proj_detalhe": None, "zonas": None,
+        "adversario_id": None, "checklist": None,
+        "rotulos": {"atual": hs.season_label(season), "anterior": hs.season_label(season - 1)},
+        "valores": [{"data": x["data"], "valor": x[mercado], "casa": x["em_casa"]} for x in reversed(vals)],
+        "medias": medias, "log": _log_rows(log, abbr, medias, mercado, p["linha"]),
+        "minutos": hs.minutes_profile(log, season), "playoffs": _log_rows(playoffs, abbr, medias, mercado, p["linha"]),
+    }
 
 
 @app.get("/api/chance")

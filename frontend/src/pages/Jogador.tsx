@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, useParams, useSearchParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   Bar, BarChart, CartesianGrid, Cell, ComposedChart, LabelList, Line, ReferenceLine, ResponsiveContainer,
   Tooltip, XAxis, YAxis,
@@ -33,10 +33,11 @@ export default function JogadorPage() {
   if (meta.data?.lavada) LAVADA = meta.data.lavada;
   const q = useQuery({ queryKey: ["jogador", id, data, mercado, betaniag],
                        queryFn: () => api.jogador(Number(id), data, mercado, betaniag) });
+  const nav = useNavigate();
 
   return (
     <>
-      <Link to="/props" className="muted small">← Props</Link>
+      <a href="#" className="muted small" onClick={(e) => { e.preventDefault(); if (window.history.length > 1) nav(-1); else nav("/props"); }}>← Voltar</a>
       <div className="tabs" style={{ margin: "10px 0" }}>
         {Object.entries(MARKETS).map(([k, v]) => (
           <button key={k} className={`tab ${k === mercado ? "on" : ""}`} onClick={() => setSp({ mercado: k })}>{v}</button>
@@ -49,8 +50,30 @@ export default function JogadorPage() {
   );
 }
 
+function SemJogo({ d, data }: { d: Detalhe; data: string }) {
+  const { setData } = usePrefs();
+  const px = d.proximo_jogo;
+  const tx = d.ultima_transacao;
+  const motivo = d.sem_time ? `Dispensado em ${ddmm(tx!.data)}; sem time no momento.`
+    : px && px.data === data ? (tx ? `Chegou ao ${d.time} em ${ddmm(tx.data)} e ainda não jogou por ele: entra nas projeções depois do primeiro jogo.`
+      : "O time joga hoje, mas ele não está na lista do dia (fora da rotação ou sem jogos recentes).")
+    : `Sem jogo em ${ddmm(data)}: abaixo, o histórico e as médias, sem projeção.`;
+  return (
+    <div className="panel" style={{ borderColor: "var(--hover-line)" }}>
+      <b>Sem projeção nesta data</b>
+      <div className="small" style={{ marginTop: 6 }}>{motivo}</div>
+      {px && px.data !== data && (
+        <div className="row" style={{ marginTop: 8 }}>
+          <span className="small">Próximo jogo: <b>{ddmm(px.data)} {px.em_casa ? "vs" : "@"} {px.adversario}</b> <span className="muted">{px.status}</span></span>
+          <button className="btn primary" onClick={() => setData(px.data)}>Ver a projeção</button>
+        </div>)}
+    </div>
+  );
+}
+
 function Body({ d, mercado, data }: { d: Detalhe; mercado: string; data: string }) {
   const fav = useFavs();
+  const sj = !!d.sem_jogo;
   const { atual, anterior } = d.rotulos;
   const [win, setWin] = useState("L10");
   const [split, setSplit] = useState<string | null>(null);
@@ -100,9 +123,10 @@ function Body({ d, mercado, data }: { d: Detalhe; mercado: string; data: string 
         <div>
           <div className="n">{d.jogador} <SealBadge s={d.selo} />
             <Star on={fav.has("jogador", d.player_id)} onClick={() => fav.toggle("jogador", d.player_id, d.jogador)} /></div>
-          <div className="muted">{d.time} x {d.adversario} · {MARKETS[mercado]} · {d.grupo ?? "?"} / {d.posicao_est ?? "?"} (estimada) · {d.jogo.status}
+          {d.jogo ? <div className="muted">{d.time} x {d.adversario} · {MARKETS[mercado]} · {d.grupo ?? "?"} / {d.posicao_est ?? "?"} (estimada) · {d.jogo.status}
             {d.jogo.validacao && <span className={`chip ${d.jogo.validacao.status === "validada" ? "ok" : "hot"}`} style={{ marginLeft: 8 }}
               title={d.jogo.validacao.motivo}>{d.jogo.validacao.status}</span>}</div>
+            : <div className="muted">{d.time ?? "sem time"} · {MARKETS[mercado]} · {d.grupo ?? "?"} · {d.jogos} jogos em {atual}</div>}
           {d.lesao && <div style={{ marginTop: 6 }}><span className="tag">{d.lesao}</span> <span className="muted small">{d.lesao_motivo}</span></div>}
         </div>
       </div>
@@ -161,6 +185,21 @@ function Body({ d, mercado, data }: { d: Detalhe; mercado: string; data: string 
         </div>
 
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          {sj && <SemJogo d={d} data={data} />}
+          {sj && (
+            <div className="kpis">
+              {([["pts", "Pontos"], ["reb", "Rebotes"], ["ast", "Assist."], ["pra", "PRA"], ["minutes", "Minutos"]] as const).map(([k, l]) =>
+                <div key={k} className="kpi"><div className="l">{l}</div><div className="v">{num(d.medias[k])}</div><div className="s">{atual}</div></div>)}
+            </div>)}
+          {sj ? (
+            <div className="panel">
+              <b>Linha para comparar</b>
+              <div className="row" style={{ marginTop: 8, alignItems: "flex-end" }}>
+                <label className="field">Linha<input className="input" type="number" step={0.5} value={line} onChange={(e) => setLine(Number(e.target.value))} /></label>
+                <span className="muted small">Começa no L10 arredondado; muda o gráfico e a contagem.</span>
+              </div>
+            </div>
+          ) : <>
           <div className="panel">
             <b>Linha da casa</b>
             <div className="row" style={{ marginTop: 8, alignItems: "flex-end" }}>
@@ -195,13 +234,14 @@ function Body({ d, mercado, data }: { d: Detalhe; mercado: string; data: string 
               </tbody></table>
             </div>
           )}
-          <div className="panel">
+          {d.jogo && <div className="panel">
             <b>Desfalques</b> <span className="muted small">{d.jogo.injury_report ? `injury report ${d.jogo.injury_report.slice(11)} ET` : "fora no último jogo"}</span>
             <div className="small" style={{ marginTop: 6 }}>{d.jogo.fora}: {d.jogo.desfalques?.fora.join(", ") || "—"}<br />{d.jogo.casa}: {d.jogo.desfalques?.casa.join(", ") || "—"}</div>
             {d.com_sem?.map((c) => <div key={c.companheiro} className="small" style={{ marginTop: 6 }}>Com <b>{c.companheiro}</b>: {c.com ?? "—"} em {c.jogos_com} j · sem: {c.sem ?? "—"} em {c.jogos_sem} j</div>)}
             {d.jogo.margem_esperada != null && <div className="muted small" style={{ marginTop: 6 }}>
               Margem esperada: {d.jogo.margem_esperada >= 0 ? d.jogo.casa : d.jogo.fora} por {Math.abs(d.jogo.margem_esperada).toFixed(1)} · blowout {Math.round(100 * (d.jogo.risco_blowout ?? 0))}%</div>}
-          </div>
+          </div>}
+          </>}
           {d.proj_detalhe && (
             <div className="panel small"><b>De onde vem a projeção</b>
               <div style={{ marginTop: 6, lineHeight: 1.7 }}>

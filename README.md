@@ -212,7 +212,8 @@ Abre na hora com a liga: última rodada (placar e cestinhas), destaques pelo
 Game Score, classificação, líderes, manchetes da ESPN e transações da NBA em
 português. As projeções do dia ("Hoje") carregam à parte. Manchetes e
 transações vêm junto do `nbastats atualizar`; para buscar só elas:
-`nbastats noticias`.
+`nbastats noticias`. Clicar num jogador que não joga na data (Ranking,
+transações, líderes) abre o perfil dele, sem projeção, com o próximo jogo.
 
 ### Calibração, cascata, alertas e app no celular
 
@@ -276,21 +277,31 @@ nbastats usuario senha coni          # digita a nova; derruba as sessões
 nbastats usuario desativar coni      # ou ativar
 ```
 
-### Subir numa VPS para testar (Docker)
+### Subir numa VPS (Docker)
 
 ```bash
-nbastats atualizar                 # dados novos no data/nba.db local
-deploy/vps.sh subir                # site novo (:8100) e antigo (:8501); gera a senha na 1ª vez
-deploy/vps.sh dados                # só troca o banco e reinicia
-deploy/vps.sh senha                # mostra a senha (fica só na VPS)
-deploy/vps.sh desativar            # remove tudo da VPS
+deploy/vps.sh subir        # código do último commit; banco inteiro só na 1ª vez
+deploy/vps.sh dados        # só as estatísticas do computador (o site não reinicia)
+deploy/vps.sh ajustes      # configurações da Administração (data/ajustes)
+deploy/vps.sh status       # contêiner e hora dos dados na VPS
+deploy/vps.sh desativar    # remove tudo da VPS
 ```
 
-Padrão: `root@45.159.173.222` com a chave `~/.ssh/netsentinel-vps`, portas
-8100 (novo) e 8501 (antigo; `PORTA_ANTIGO=` vazio não sobe o antigo). Na nuvem o "Atualizar agora"
-não funciona (o stats.nba.com bloqueia IPs de servidor): os dados são os do
-banco enviado. É HTTP sem cadeado: só para teste; para ficar no ar, usar um
-subdomínio com HTTPS.
+- **Banco**: na primeira subida vai o `data/nba.db` inteiro, com os usuários.
+  Depois a VPS é dona do que se faz no site (logins, sessões, apostas, linhas,
+  favoritos) e do computador só vão as estatísticas: `nbastats importar-dados
+  <arquivo>` faz upsert das tabelas de dados e não toca nas de uso.
+- **Dados**: na nuvem o stats.nba.com bloqueia o IP, então o "Atualizar"
+  não funciona lá. Para enviar sozinho, instale o cron com
+  `VPS_SYNC=1 deploy/cron.sh instalar` (10 min depois de cada atualização).
+- **HTTPS**: com `DOMINIO=nba.exemplo.com`, o contêiner entra na rede do Caddy
+  (`REDE`, padrão `netsentinel_default`) com o nome `nba-stats` e a porta fica
+  só em `127.0.0.1`; o Caddy precisa de um bloco
+  `nba.exemplo.com { reverse_proxy nba-stats:8000 }`. Sem `DOMINIO`, é HTTP na
+  porta 8100, só para teste.
+- O Streamlit antigo não sobe mais por padrão (`PORTA_ANTIGO=8501` para subir).
+
+Padrão: `root@45.159.173.222` com a chave `~/.ssh/netsentinel-vps`.
 
 ### Atualização automática, backup e alerta (cron no WSL)
 
