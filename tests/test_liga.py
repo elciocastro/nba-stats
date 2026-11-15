@@ -13,9 +13,14 @@ ESPN = {"articles": [
     {"id": 1, "type": "Recap", "published": "2026-11-06T03:00:00Z", "headline": "Warriors beat Bulls ",
      "description": "— Novato Sobe had 25 points.", "links": {"web": {"href": "http://www.espn.com/nba/recap?gameId=1"}},
      "images": [{"url": "https://a.espncdn.com/x.jpg"}],
-     "categories": [{"type": "league", "description": "NBA"}, {"type": "team", "description": "Chicago Bulls"}]},
+     "categories": [{"type": "league", "description": "NBA", "leagueId": 46},
+                    {"type": "team", "description": "Chicago Bulls", "sportId": 46}]},
     {"id": 2, "type": "Media", "published": "2026-11-06T04:00:00Z", "headline": "Highlights",
-     "links": {"web": {"href": "https://www.espn.com/video/2"}}},
+     "links": {"web": {"href": "https://www.espn.com/video/2"}}, "categories": [{"type": "league", "leagueId": 46}]},
+    {"id": 4, "type": "Media", "headline": "USMNT striker does 'Dame Time' celebration",
+     "links": {"web": {"href": "https://www.espn.com/video/4"}},
+     "categories": [{"type": "team", "description": "United States", "sportId": 600},
+                    {"type": "team", "description": "Portland Trail Blazers", "sportId": 46}]},
     {"id": 3, "type": "Story", "headline": "Sem link"},
 ]}
 MOV = {"NBA_Player_Movement": {"rows": [
@@ -51,7 +56,7 @@ def loaded(conn, source):
 def test_fonte_normaliza_noticias_e_transacoes():
     feed = NbaNewsFeed(get=fake_get)
     news = feed.news()
-    assert [n["id"] for n in news] == ["1", "2"]  # sem link fica de fora
+    assert [n["id"] for n in news] == ["1", "2"]  # sem link e futebol ficam de fora
     n = news[0]
     assert n["titulo"] == "Warriors beat Bulls" and n["resumo"] == "Novato Sobe had 25 points."
     assert n["url"].startswith("https://") and n["times"] == ["Chicago Bulls"]

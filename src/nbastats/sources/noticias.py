@@ -34,9 +34,22 @@ def _int(v: Any) -> int | None:
         return None
 
 
+NBA, G_LEAGUE = 46, 69  # ids de liga/esporte da ESPN
+
+
+def is_nba(a: dict[str, Any]) -> bool:
+    """O feed de NBA às vezes traz outro esporte (ex.: seleção de futebol
+    que comemora como um jogador da NBA). Vale se cita a NBA e nenhum time
+    citado é de outro esporte."""
+    cats = a.get("categories") or []
+    cita_nba = any(c.get("leagueId") == NBA or (c.get("type") == "team" and c.get("sportId") == NBA) for c in cats)
+    outro = any(c.get("type") == "team" and c.get("sportId") not in (None, NBA, G_LEAGUE) for c in cats)
+    return cita_nba and not outro
+
+
 def normalize_article(a: dict[str, Any]) -> dict[str, Any] | None:
     url = ((a.get("links") or {}).get("web") or {}).get("href")
-    if not a.get("headline") or not url:
+    if not a.get("headline") or not url or not is_nba(a):
         return None
     imgs = [i.get("url") for i in a.get("images") or [] if i.get("url")]
     return {
@@ -48,7 +61,7 @@ def normalize_article(a: dict[str, Any]) -> dict[str, Any] | None:
         "url": url.replace("http://", "https://", 1),
         "imagem": imgs[0] if imgs else None,
         "times": [c.get("description") for c in a.get("categories") or []
-                  if c.get("type") == "team" and c.get("description")],
+                  if c.get("type") == "team" and c.get("description") and c.get("sportId") in (None, NBA)],
     }
 
 

@@ -62,11 +62,13 @@ export function BolaQuicando({ size = 64 }: { size?: number }) {
   return (
     <div className="bola" style={{ width: size, height: size * 1.9 }} aria-hidden="true">
       <svg className="bola-svg" width={size} height={size} viewBox="0 0 64 64">
-        <circle cx="32" cy="32" r="30" fill="var(--brand)" />
-        <g fill="none" stroke="var(--brand-ink)" strokeWidth="3" strokeLinecap="round" opacity=".85">
-          <path d="M32 2 V62 M2 32 H62" />
-          <path d="M12 10 C22 20 22 44 12 54" />
-          <path d="M52 10 C42 20 42 44 52 54" />
+        <g className="bola-giro">
+          <circle cx="32" cy="32" r="30" fill="var(--brand)" />
+          <g fill="none" stroke="var(--brand-ink)" strokeWidth="3" strokeLinecap="round" opacity=".85">
+            <path d="M32 2 V62 M2 32 H62" />
+            <path d="M12 10 C22 20 22 44 12 54" />
+            <path d="M52 10 C42 20 42 44 52 54" />
+          </g>
         </g>
         <circle cx="23" cy="20" r="9" fill="#fff" opacity=".14" />
       </svg>

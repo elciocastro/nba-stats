@@ -222,15 +222,17 @@ table.t td .prog { margin: 0; }
 .bola-svg { position: absolute; top: 0; animation: quica 1.15s cubic-bezier(.5, 0, .5, 1) infinite; transform-origin: 50% 100%; }
 .bola-sombra { position: absolute; bottom: 4px; width: 60%; height: 8px; border-radius: 50%; background: var(--shadow);
   filter: blur(2px); animation: sombra 1.15s cubic-bezier(.5, 0, .5, 1) infinite; }
+/* a queda e o achatamento ficam no svg; o giro, num grupo que gira pelo próprio centro */
 @keyframes quica {
-  0%, 100% { transform: translateY(0) rotate(0deg); }
-  45% { transform: translateY(calc(var(--queda, 54px))) rotate(160deg) scale(1, 1); }
-  50% { transform: translateY(calc(var(--queda, 54px))) rotate(180deg) scale(1.08, .9); }
-  55% { transform: translateY(calc(var(--queda, 54px))) rotate(200deg) scale(1, 1); }
+  0%, 100% { transform: translateY(0); }
+  45%, 55% { transform: translateY(var(--queda, 54px)) scale(1, 1); }
+  50% { transform: translateY(var(--queda, 54px)) scale(1.08, .9); }
 }
+.bola-giro { transform-box: fill-box; transform-origin: center; animation: giro 2.3s linear infinite; }
+@keyframes giro { to { transform: rotate(360deg); } }
 @keyframes sombra { 0%, 100% { transform: scale(.55); opacity: .35; } 50% { transform: scale(1); opacity: .8; } }
 @media (prefers-reduced-motion: reduce) {
-  .bola-svg, .bola-sombra, .login-bg .quadra { animation: none; }
+  .bola-svg, .bola-sombra, .bola-giro, .login-bg .quadra { animation: none; }
   .bola-svg { transform: translateY(var(--queda, 54px)); }
 }
 .carregando { display: flex; align-items: center; gap: 14px; color: var(--muted); padding: 18px 0; }
