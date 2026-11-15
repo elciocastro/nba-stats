@@ -195,13 +195,14 @@ ritmo, saldo, desfalques, nota por critério, agenda, telas Matchups e DvP,
 - [x] 7b. Front React (Vite + TypeScript, TanStack Table, gráficos
   interativos), servido pela própria API; Streamlit segue até cobrir tudo.
 - [x] 7c. Início e Jogador primeiro.
-- [ ] 7d. **Props integrado** (Coni): Props, Linhas, Matchups, DvP, Jogador
+- [x] 7d. **Props integrado** (Coni): Props, Linhas, Matchups, DvP, Jogador
   e Potenciais como abas de uma só área, com o mesmo jogo/mercado/filtro.
-- [ ] 7e. **Ao Vivo**: jogos em andamento com placar e, por jogador, o
+- [x] 7e. **Ao Vivo**: jogos em andamento com placar e, por jogador, o
   parcial de pontos/rebotes/assistências/3 pts contra a média e a linha
   (ritmo atual → projeção do final); destaca quem está a caminho de bater.
-  Fonte: placar ao vivo do nba_api (`live` endpoints), a validar.
-- [ ] 7f. **Favoritos**: jogadores, times e jogos (tabela `favorites`),
+  Fonte: placar ao vivo do CDN da NBA (`nba_api.live`), validado em 2026-11-14
+  com jogos em andamento; responde também de servidor na nuvem (CDN).
+- [x] 7f. **Favoritos**: jogadores, times e jogos (tabela `favorites`),
   filtro "só favoritos" e destaque no Início.
 - [x] 7g. Docker com API + front num contêiner; `deploy/vps.sh` igual.
 

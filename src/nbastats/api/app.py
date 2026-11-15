@@ -24,7 +24,12 @@ from nbastats import db
 from nbastats.config import get_settings
 from nbastats.ingest import last_refresh
 from nbastats.metrics import betaniag as bt
+from nbastats.metrics import aovivo as av
 from nbastats.metrics import destaques as dq
+from nbastats.metrics import favoritos as fv
+from nbastats.metrics.comparar import _season_of
+from nbastats.metrics.matchup import dvp_table, load_matchup_rules
+from nbastats.metrics.potencial import load_rules, rank_potenciais
 from nbastats.metrics import historico as hs
 from nbastats.metrics.linhas import prob_over, save_line
 from nbastats.metrics.painel import day_report
@@ -63,8 +68,15 @@ async def lifespan(_app):
 app = FastAPI(title="nba-stats", docs_url="/api/docs", openapi_url="/api/openapi.json", lifespan=lifespan)
 
 
+_SCHEMA_OK = False
+
+
 def get_conn():
+    global _SCHEMA_OK
     conn = db.connect(settings.db_path, threads=True)
+    if not _SCHEMA_OK:  # tabelas novas (ex.: favorites) em bancos antigos
+        db.init_db(conn)
+        _SCHEMA_OK = True
     try:
         yield conn
     finally:
@@ -115,7 +127,10 @@ def _player_row(p: dict[str, Any], stat: str, n: int = 20) -> dict[str, Any]:
         "min_l5": p.get("min_l5"), "min_l10": p.get("min_l10"),
         "usg_l5": p.get("usg_l5"), "usg_l10": p.get("usg_l10"),
         "dvp_rank": p.get("dvp_rank"), "dvp_rec_rank": p.get("dvp_rec_rank"),
-        "selo": p.get("selo"), "janelas": p.get("janelas"),
+        "selo": p.get("selo"), "janelas": p.get("janelas"), "time_id": p.get("time_id"),
+        "jogos": p.get("jogos"), "proj_vs_l10": p.get("proj_vs_l10"),
+        "encaixe_zonas": p.get("encaixe_zonas"), "com_sem": p.get("com_sem"),
+        "fora_ultimo_jogo": p.get("fora_ultimo_jogo"), "real": p.get("real"),
         "valores": [{"data": g["data"], "valor": g[stat], "casa": g["em_casa"]} for g in reversed(hist[:n])],
     }
 
@@ -124,6 +139,7 @@ def _game(g: dict[str, Any]) -> dict[str, Any]:
     j = g["jogo"]
     return {
         "id": j["id"], "casa": j["home"], "fora": j["visitor"], "status": j.get("status"),
+        "casa_id": j["home_team_id"], "fora_id": j["visitor_team_id"],
         "placar_casa": j["home_team_score"], "placar_fora": j["visitor_team_score"],
         "margem_esperada": g.get("margem_esperada"), "risco_blowout": g.get("risco_blowout"),
         "ritmo": g.get("ritmo"), "desfalques": g.get("desfalques"),
@@ -244,6 +260,117 @@ def put_line(body: Linha, conn=Depends(get_conn)):
         raise HTTPException(400, "mercado inválido")
     save_line(conn, body.data, body.player_id, body.mercado, body.linha, body.odd_over, body.odd_under)
     return {"ok": True}
+
+
+@app.put("/api/linhas/lote")
+def put_lines(body: list[Linha], conn=Depends(get_conn)):
+    for b in body:
+        if b.mercado not in MARKETS:
+            raise HTTPException(400, f"mercado inválido: {b.mercado}")
+    for b in body:
+        save_line(conn, b.data, b.player_id, b.mercado, b.linha, b.odd_over, b.odd_under)
+    return {"ok": True, "salvas": len(body)}
+
+
+@app.get("/api/dvp")
+def dvp(data: str | None = None, mercado: str = "pts", recente: bool = False, conn=Depends(get_conn)):
+    day = _day(data)
+    season = _season_of(conn, day)
+    if season is None:
+        return {"grupos": [], "linhas": []}
+    rules = load_matchup_rules()
+    rows = dvp_table(conn, season, day, mercado, rules, recent=recente)
+    groups = sorted(set((rules.get("posicoes") or {}).values()))
+    playing = {r["abbreviation"] for r in conn.execute(
+        "SELECT t.abbreviation FROM games g JOIN teams t ON t.id IN (g.home_team_id, g.visitor_team_id)"
+        " WHERE g.date = ?", (day,))}
+    return {"grupos": groups, "dias_recente": rules.get("dvp_recente_dias", 15),
+            "linhas": [{**r, "joga_hoje": r["time"] in playing} for r in rows]}
+
+
+@app.get("/api/potenciais")
+def potenciais(data: str | None = None, conn=Depends(get_conn)):
+    day = _day(data)
+    season = _season_of(conn, day)
+    if season is None:
+        return {"regras": {}, "jogadores": []}
+    rules = load_rules()
+    playing = {r["id"] for r in conn.execute(
+        "SELECT p.id FROM players p JOIN games g ON p.team_id IN (g.home_team_id, g.visitor_team_id)"
+        " WHERE g.date = ?", (day,))}
+    rows = rank_potenciais(conn, season, rules)
+    return {"regras": rules, "jogadores": [{**r, "joga_hoje": r["player_id"] in playing} for r in rows]}
+
+
+class Favorito(BaseModel):
+    tipo: str
+    id: int
+    nome: str | None = None
+
+
+@app.get("/api/favoritos")
+def favorites(conn=Depends(get_conn)):
+    return fv.list_favorites(conn)
+
+
+@app.post("/api/favoritos")
+def add_fav(body: Favorito, conn=Depends(get_conn)):
+    try:
+        fv.add_favorite(conn, body.tipo, body.id, body.nome)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    return fv.list_favorites(conn)
+
+
+@app.delete("/api/favoritos/{tipo}/{entity_id}")
+def del_fav(tipo: str, entity_id: int, conn=Depends(get_conn)):
+    try:
+        fv.remove_favorite(conn, tipo, entity_id)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    return fv.list_favorites(conn)
+
+
+# ---------- ao vivo ----------
+
+_LIVE: dict[str, Any] = {"t": 0.0, "dados": None}
+LIVE_TTL = 20  # segundos: o placar da NBA atualiza a cada ~10-20 s
+
+
+def get_live():
+    from nbastats.sources.nba_live import NbaLiveSource
+    return NbaLiveSource()
+
+
+def _live_games(source) -> list[dict[str, Any]]:
+    import time
+    if _LIVE["dados"] is None or time.time() - _LIVE["t"] > LIVE_TTL:
+        _LIVE["dados"], _LIVE["t"] = source.live_games(), time.time()
+    return _LIVE["dados"]
+
+
+@app.get("/api/aovivo")
+def ao_vivo(mercado: str = "pts", alvo: str = "linha", conn=Depends(get_conn), live=Depends(get_live)):
+    if mercado not in MARKETS or alvo not in ("linha", "media"):
+        raise HTTPException(400, "mercado ou alvo inválido")
+    try:
+        games = _live_games(live)
+    except Exception as exc:  # NBA fora do ar, rede etc.
+        raise HTTPException(502, f"Placar ao vivo indisponível: {exc}")
+    if not games:
+        return {"data": None, "jogos": [], "destaques": []}
+    day = games[0]["data"]
+    report = day_report(conn, day, mercado, last_refresh(conn), None)
+    pre = {p["player_id"]: {"proj": p.get("proj"), "min_esperado": (p.get("proj_detalhe") or {}).get("minutos"),
+                            "linha": p.get("linha"), "linha_ref": p.get("linha_ref"), "media": p.get("temporada"),
+                            "l10": p.get("l10"), "jogador": p["jogador"], "time": p["time"]}
+           for g in report for p in g["jogadores"]}
+    out = av.live_report(games, pre, mercado, load_projection_params(), alvo)
+    top = [{**p, "jogo": f"{g['fora']} @ {g['casa']}", "game_id": g["game_id"]}
+           for g in out if g["status"] == 2 for p in g["jogadores"]
+           if p["status"] in ("a caminho", "precisa acelerar")]
+    top.sort(key=lambda r: r["chance"] or 0, reverse=True)
+    return {"data": day, "jogos": out, "destaques": top[:15], "atualizado_ha": round(__import__("time").time() - _LIVE["t"])}
 
 
 # ---------- site (frontend/dist), se montado ----------

@@ -57,3 +57,17 @@ class InjurySource(Protocol):
         """{'published_at': 'AAAA-MM-DDTHH:MM', 'url': ..., 'rows': [{game_date,
         matchup, team, player_name, status, reason}]} ou None se não houver."""
         ...
+
+
+class LiveSource(Protocol):
+    """Placar ao vivo (só leitura; nada é gravado no banco).
+
+    ``live_games`` devolve os jogos do dia da NBA (data ET) já normalizados:
+    {game_id, data, status (1 agendado, 2 em andamento, 3 final), status_texto,
+    periodo, relogio_seg, casa, fora, casa_id, fora_id, placar_casa,
+    placar_fora, jogadores: [{player_id, team_id, nome, minutos, pts, reb, ast,
+    fg3m, fg3a, ftm, fta, stl, blk, turnover, faltas, em_quadra, titular}]}.
+    Jogadores só vêm para jogos em andamento ou encerrados.
+    """
+
+    def live_games(self) -> list[dict[str, Any]]: ...

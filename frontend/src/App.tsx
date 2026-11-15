@@ -4,6 +4,8 @@ import { BrowserRouter, NavLink, Route, Routes } from "react-router-dom";
 import { api, SenhaError } from "./api";
 import Inicio from "./pages/Inicio";
 import JogadorPage from "./pages/Jogador";
+import Props from "./pages/Props";
+import AoVivo from "./pages/AoVivo";
 
 type Prefs = { data: string; setData: (d: string) => void; betaniag: boolean; setBetaniag: (b: boolean) => void };
 const Ctx = createContext<Prefs>(null!);
@@ -48,7 +50,8 @@ function Shell() {
         <span className="brand">🏀 NBA Stats</span>
         <nav className="nav">
           <NavLink to="/" end>Início</NavLink>
-          <a href="http://localhost:8501" target="_blank" rel="noreferrer" title="Site antigo (Streamlit)">Props ↗</a>
+          <NavLink to="/props">Props</NavLink>
+          <NavLink to="/aovivo">Ao Vivo</NavLink>
         </nav>
         <span className="sp" />
         <label className="toggle"><input type="checkbox" checked={betaniag} onChange={(e) => setBetaniag(e.target.checked)} />BetânIAG</label>
@@ -58,10 +61,14 @@ function Shell() {
         <Routes>
           <Route path="/" element={<Inicio />} />
           <Route path="/jogador/:id" element={<JogadorPage />} />
+          <Route path="/props" element={<Props />} />
+          <Route path="/aovivo" element={<AoVivo />} />
         </Routes>
       </main>
       <nav className="bottom">
         <NavLink to="/" end><b>⌂</b>Início</NavLink>
+        <NavLink to="/props"><b>▤</b>Props</NavLink>
+        <NavLink to="/aovivo"><b>●</b>Ao Vivo</NavLink>
       </nav>
     </Ctx.Provider>
   );

@@ -60,3 +60,33 @@ def test_senha(client, monkeypatch):
     assert client.get("/api/meta", headers={"X-Senha": "x"}).status_code == 200
     assert client.post("/api/login", json={"senha": "y"}).status_code == 401
     assert client.get("/api/saude").status_code == 200
+
+
+def test_favoritos(client):
+    assert client.get("/api/favoritos").json() == {"jogador": [], "time": [], "jogo": []}
+    client.post("/api/favoritos", json={"tipo": "jogador", "id": 10, "nome": "Ana"})
+    r = client.post("/api/favoritos", json={"tipo": "jogador", "id": 10})   # idempotente, mantém o nome
+    assert r.json()["jogador"][0]["label"] == "Ana" and len(r.json()["jogador"]) == 1
+    assert client.post("/api/favoritos", json={"tipo": "xpto", "id": 1}).status_code == 400
+    assert client.delete("/api/favoritos/jogador/10").json()["jogador"] == []
+    assert client.delete("/api/favoritos/jogador/10").status_code == 200
+
+
+def test_favorito_por_time_ou_jogo():
+    from nbastats.metrics.favoritos import is_favorite
+    favs = {"jogador": [], "time": [{"entity_id": 5}], "jogo": [{"entity_id": 9}]}
+    assert is_favorite(favs, {"player_id": 1, "time_id": 5, "game_id": 1})
+    assert is_favorite(favs, {"player_id": 1, "time_id": 2, "game_id": 9})
+    assert not is_favorite(favs, {"player_id": 1, "time_id": 2, "game_id": 1})
+
+
+def test_linhas_em_lote_dvp_e_potenciais(client):
+    q = {"data": "2026-11-07", "mercado": "pts"}
+    ids = [p["player_id"] for p in client.get("/api/props", params=q).json()["jogadores"]][:2]
+    body = [{**q, "player_id": i, "linha": 10.5} for i in ids]
+    assert client.put("/api/linhas/lote", json=body).json()["salvas"] == 2
+    assert all(not p["linha_ref"] for p in client.get("/api/props", params=q).json()["jogadores"]
+               if p["player_id"] in ids)
+    d = client.get("/api/dvp", params=q).json()
+    assert d["grupos"] and any(r["joga_hoje"] for r in d["linhas"])
+    assert "jogadores" in client.get("/api/potenciais", params={"data": "2026-11-07"}).json()

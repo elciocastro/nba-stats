@@ -4,7 +4,7 @@ export type Janela = { jogos: number; over: number; pct: number | null; media: n
 export type Selo = { nivel: string; cor: string; texto: string; unidade: number | null };
 
 export type Jogo = {
-  id: number; casa: string; fora: string; status: string | null;
+  id: number; casa: string; fora: string; status: string | null; casa_id: number; fora_id: number;
   placar_casa: number | null; placar_fora: number | null;
   margem_esperada: number | null; risco_blowout: number | null;
   ritmo: { casa: number | null; fora: number | null; liga: number | null } | null;
@@ -22,7 +22,18 @@ export type Jogador = {
   min_l5: number | null; min_l10: number | null; usg_l5: number | null; usg_l10: number | null;
   dvp_rank: number | null; dvp_rec_rank: number | null; selo: Selo | null;
   janelas: Record<string, Janela>; valores: { data: string; valor: number; casa: boolean }[];
+  time_id: number; jogos: number; proj_vs_l10: number | null; encaixe_zonas: number | null;
+  com_sem: { companheiro: string; com: number | null; jogos_com: number; sem: number | null; jogos_sem: number }[] | null;
+  fora_ultimo_jogo: boolean; real: number | null;
 };
+
+export type Favoritos = Record<"jogador" | "time" | "jogo", { entity_id: number; label: string | null }[]>;
+export type LinhaIn = { data: string; player_id: number; mercado: string; linha: number | null;
+                        odd_over: number | null; odd_under: number | null };
+export type DvpResp = { grupos: string[]; dias_recente: number;
+                        linhas: ({ time: string; joga_hoje: boolean } & Record<string, number | string | boolean>)[] };
+export type Potencial = { player_id: number; jogador: string; time: string; posicao: string | null; jogos: number;
+                          anos_de_liga: number | null; nota: number; joga_hoje: boolean } & Record<string, number | string | null | boolean>;
 
 export type JogoLog = {
   data: string; season: number; game_id: number; opp_id: number; adv: string; em_casa: boolean;
@@ -93,6 +104,13 @@ export const api = {
   salvarLinha: (b: { data: string; player_id: number; mercado: string; linha: number | null;
                      odd_over: number | null; odd_under: number | null }) =>
     call<{ ok: boolean }>("/api/linhas", { method: "PUT", body: JSON.stringify(b) }),
+  salvarLinhas: (b: LinhaIn[]) => call<{ salvas: number }>("/api/linhas/lote", { method: "PUT", body: JSON.stringify(b) }),
+  dvp: (data: string, mercado: string, recente: boolean) => call<DvpResp>(`/api/dvp?${qs({ data, mercado, recente })}`),
+  potenciais: (data: string) => call<{ jogadores: Potencial[]; regras: Record<string, unknown> }>(`/api/potenciais?${qs({ data })}`),
+  favoritos: () => call<Favoritos>("/api/favoritos"),
+  favoritar: (tipo: string, id: number, nome?: string) =>
+    call<Favoritos>("/api/favoritos", { method: "POST", body: JSON.stringify({ tipo, id, nome }) }),
+  desfavoritar: (tipo: string, id: number) => call<Favoritos>(`/api/favoritos/${tipo}/${id}`, { method: "DELETE" }),
   login: async (s: string) => {
     const r = await fetch("/api/login", { method: "POST", headers: { "Content-Type": "application/json" },
                                           body: JSON.stringify({ senha: s }) });
@@ -102,3 +120,19 @@ export const api = {
 };
 
 export const headshot = (id: number) => `https://cdn.nba.com/headshots/nba/latest/260x190/${id}.png`;
+
+export type LivePlayer = {
+  player_id: number; jogador: string; time: string; atual: number; minutos: number; restante: number;
+  final: number; chance: number | null; falta: number | null; status: string | null; alertas: string[];
+  alvo: number | null; linha_ref: boolean; media: number | null; proj_pre: number | null;
+  em_quadra: boolean; faltas: number; jogo?: string; game_id?: number;
+};
+export type LiveGame = {
+  game_id: number; status: number; status_texto: string; periodo: number; relogio_seg: number;
+  casa: string; fora: string; placar_casa: number; placar_fora: number; minutos_restantes: number;
+  jogadores: LivePlayer[];
+};
+export const aoVivo = (mercado: string, alvo: string) =>
+  fetch(`/api/aovivo?mercado=${mercado}&alvo=${alvo}`, { headers: { "X-Senha": localStorage.getItem("senha") ?? "" } })
+    .then(async (r) => { if (r.status === 401) throw new SenhaError("senha"); if (!r.ok) throw new Error((await r.json()).detail); return r.json(); }) as
+    Promise<{ data: string | null; jogos: LiveGame[]; destaques: LivePlayer[]; atualizado_ha: number }>;

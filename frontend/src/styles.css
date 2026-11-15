@@ -127,3 +127,31 @@ input[type=range] { width: 100%; accent-color: var(--over); }
   .top .toggle { font-size: .75rem; }
   .bottom { box-shadow: 0 -6px 16px rgba(0,0,0,.5); }
 }
+.star { background: none; border: 0; cursor: pointer; color: #5b6676; font-size: 1.05rem; padding: 0 4px; line-height: 1; }
+.star.on { color: #fbbf24; }
+.star:hover { color: #fbbf24; }
+.sticky-tools { position: sticky; top: 57px; z-index: 10; background: var(--bg); padding: 8px 0; display: flex;
+  flex-direction: column; gap: 8px; border-bottom: 1px solid var(--line); margin-bottom: 12px; }
+.areatabs { display: flex; gap: 2px; border-bottom: 1px solid var(--line); margin: 6px 0 4px; overflow-x: auto; scrollbar-width: none; }
+.areatabs a { padding: 8px 14px; color: var(--soft); border-bottom: 2px solid transparent; white-space: nowrap; }
+.areatabs a.on { color: var(--text); border-color: var(--over); }
+.gchip { display: inline-flex; align-items: center; gap: 2px; }
+td input.cell { width: 72px; background: var(--panel2); border: 1px solid var(--line); border-radius: 6px; padding: 3px 6px; text-align: right; }
+td input.cell.dirty { border-color: var(--amber); }
+.pname { display: flex; align-items: center; gap: 8px; min-width: 190px; }
+.pname img, .pname .ph { width: 28px; height: 28px; }
+@media (max-width: 760px) { .sticky-tools { top: 49px; } }
+.prog { position: relative; height: 8px; background: #1c2532; border-radius: 99px; margin: 8px 0 6px; overflow: visible; }
+.prog .proj { position: absolute; inset: 0 auto 0 0; background: rgba(59, 130, 246, .35); border-radius: 99px; }
+.prog .cur { position: absolute; inset: 0 auto 0 0; background: var(--accent); border-radius: 99px; transition: width .6s; }
+.prog .cur.done { background: var(--over); }
+.prog .tgt { position: absolute; top: -4px; bottom: -4px; width: 2px; background: #e6edf3; }
+table.t td .prog { margin: 0; }
+.pulse { color: var(--under); font-size: .8rem; animation: pulse 1.4s infinite; vertical-align: middle; }
+@keyframes pulse { 50% { opacity: .25; } }
+@media (max-width: 760px) { table.live .pc { display: none; } table.live td, table.live th { padding: 6px 5px; } }
+@media (max-width: 760px) {
+  table.live .pname { min-width: 0; gap: 2px; }
+  table.live td:first-child { white-space: normal; max-width: 128px; }
+  table.live .pname .muted { display: block; }
+}
