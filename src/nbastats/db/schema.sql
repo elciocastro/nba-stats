@@ -141,3 +141,12 @@ CREATE TABLE IF NOT EXISTS bets (
     settled_at    TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_bets_date ON bets (date);
+
+-- Favoritos (jogadores, times e jogos). Site de senha única: a lista é compartilhada.
+CREATE TABLE IF NOT EXISTS favorites (
+    id          TEXT PRIMARY KEY,     -- tipo:entidade (jogador:203999)
+    kind        TEXT NOT NULL,        -- jogador | time | jogo
+    entity_id   INTEGER NOT NULL,
+    label       TEXT,
+    created_at  TEXT NOT NULL
+);

@@ -169,8 +169,11 @@ em vez de abrir a porta para a internet.
 ### Site novo (API + React), em migração
 
 O site novo convive com o Streamlit até cobrir todas as páginas. Hoje:
-Início e Jogador (gráficos interativos, tabela jogo a jogo ordenável e
-colorida, "e se jogar X minutos", linha da casa).
+Início (destaques e favoritos), Jogador (gráficos interativos, tabela jogo a
+jogo ordenável e colorida, "e se jogar X minutos", linha da casa) e **Props
+integrado**: abas Props, Linhas, Matchups, DvP e Potenciais com o mesmo dia,
+mercado, jogos, busca e filtro de favoritos. **Favoritos** (★) em jogadores,
+times e jogos, guardados no banco e compartilhados entre quem usa o site.
 
 ```bash
 pip install -e ".[api]"

@@ -44,3 +44,74 @@ export function Bars({ values, line, w = 150, h = 36 }: { values: number[]; line
     </svg>
   );
 }
+
+// ---------- tabela ordenável ----------
+import { ColumnDef, flexRender, getCoreRowModel, getSortedRowModel, SortingState, useReactTable } from "@tanstack/react-table";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect } from "react";
+import { api, Favoritos } from "./api";
+
+export function DataTable<T>({ data, columns, onRow, cellClass, initialSort, maxHeight = 680 }: {
+  data: T[]; columns: ColumnDef<T, any>[]; onRow?: (r: T) => void;
+  cellClass?: (r: T, col: string) => string | React.CSSProperties | undefined;
+  initialSort?: SortingState; maxHeight?: number;
+}) {
+  const [sorting, setSorting] = useState<SortingState>(initialSort ?? []);
+  const table = useReactTable({ data, columns, state: { sorting }, onSortingChange: setSorting,
+                                getCoreRowModel: getCoreRowModel(), getSortedRowModel: getSortedRowModel() });
+  return (
+    <div className="tw" style={{ maxHeight }}>
+      <table className="t">
+        <thead>{table.getHeaderGroups().map((hg) => (
+          <tr key={hg.id}>{hg.headers.map((h) => (
+            <th key={h.id} onClick={h.column.getToggleSortingHandler()} title={String(h.column.columnDef.meta ?? "")}>
+              {flexRender(h.column.columnDef.header, h.getContext())}
+              {{ asc: " ▲", desc: " ▼" }[h.column.getIsSorted() as string] ?? ""}
+            </th>))}</tr>))}
+        </thead>
+        <tbody>{table.getRowModel().rows.map((r) => (
+          <tr key={r.id} onClick={onRow ? () => onRow(r.original) : undefined} style={onRow ? { cursor: "pointer" } : undefined}>
+            {r.getVisibleCells().map((c) => {
+              const x = cellClass?.(r.original, c.column.id);
+              return <td key={c.id} className={typeof x === "string" ? x : undefined} style={typeof x === "object" ? x : undefined}>
+                {flexRender(c.column.columnDef.cell, c.getContext())}</td>;
+            })}</tr>))}
+        </tbody>
+      </table>
+      {!data.length && <div className="muted" style={{ padding: 14 }}>Nada com esses filtros.</div>}
+    </div>
+  );
+}
+
+// ---------- favoritos ----------
+export function useFavs() {
+  const qc = useQueryClient();
+  const q = useQuery({ queryKey: ["favoritos"], queryFn: api.favoritos, staleTime: 300_000 });
+  const set = (d: Favoritos) => qc.setQueryData(["favoritos"], d);
+  const add = useMutation({ mutationFn: (v: { tipo: string; id: number; nome?: string }) => api.favoritar(v.tipo, v.id, v.nome), onSuccess: set });
+  const del = useMutation({ mutationFn: (v: { tipo: string; id: number }) => api.desfavoritar(v.tipo, v.id), onSuccess: set });
+  const favs = q.data ?? { jogador: [], time: [], jogo: [] };
+  const has = (tipo: keyof Favoritos, id: number) => favs[tipo].some((f) => f.entity_id === id);
+  const toggle = (tipo: keyof Favoritos, id: number, nome?: string) =>
+    has(tipo, id) ? del.mutate({ tipo, id }) : add.mutate({ tipo, id, nome });
+  // jogador favorito, do time favorito ou no jogo favorito
+  const playerFav = (p: { player_id: number; time_id?: number; game_id?: number }) =>
+    has("jogador", p.player_id) || (p.time_id != null && has("time", p.time_id)) || (p.game_id != null && has("jogo", p.game_id));
+  return { favs, has, toggle, playerFav };
+}
+
+export function Star({ on, onClick, title }: { on: boolean; onClick: () => void; title?: string }) {
+  return <button className={`star ${on ? "on" : ""}`} title={title ?? (on ? "Tirar dos favoritos" : "Favoritar")}
+    onClick={(e) => { e.stopPropagation(); onClick(); }}>{on ? "★" : "☆"}</button>;
+}
+
+export function useMobile(px = 760) {
+  const [m, setM] = useState(() => window.matchMedia(`(max-width: ${px}px)`).matches);
+  useEffect(() => {
+    const mq = window.matchMedia(`(max-width: ${px}px)`);
+    const f = () => setM(mq.matches);
+    mq.addEventListener("change", f);
+    return () => mq.removeEventListener("change", f);
+  }, [px]);
+  return m;
+}

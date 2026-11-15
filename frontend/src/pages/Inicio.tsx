@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { api, Oportunidade } from "../api";
 import { usePrefs } from "../App";
-import { Bars, num, Photo, SealBadge } from "../components";
+import { Bars, num, Photo, SealBadge, useFavs } from "../components";
 
 const MK: Record<string, string> = { pts: "Pontos", reb: "Rebotes", ast: "Assist.", pra: "PRA", fg3m: "3FM" };
 
@@ -11,6 +11,9 @@ export default function Inicio() {
   const nav = useNavigate();
   const q = useQuery({ queryKey: ["inicio", data, betaniag], queryFn: () => api.inicio(data, betaniag) });
   const open = (id: number, mercado: string) => nav(`/jogador/${id}?mercado=${mercado}`);
+  const fav = useFavs();
+  const pra = useQuery({ queryKey: ["props", data, "pra", betaniag], queryFn: () => api.props(data, "pra", betaniag) });
+  const favPlayers = (pra.data?.jogadores ?? []).filter((p) => fav.playerFav(p));
 
   if (q.isLoading) return <div className="loading">Montando os destaques… (a primeira conta do dia leva alguns segundos)</div>;
   if (q.error) return <div className="err">{String(q.error)}</div>;
@@ -28,6 +31,21 @@ export default function Inicio() {
         <div className="kpi"><div className="l">Com odd da casa</div><div className="v">{d.oportunidades.com_odd.length}</div></div>
         <div className="kpi"><div className="l">Em alta</div><div className="v">{d.em_alta.length}</div></div>
       </div>
+
+      {favPlayers.length > 0 && (
+        <>
+          <h2>★ Favoritos que jogam hoje (PRA)</h2>
+          <div className="games">{favPlayers.map((p) => (
+            <div className="prow" key={p.player_id} onClick={() => open(p.player_id, "pra")} style={{ border: "1px solid var(--line)" }}>
+              <Photo id={p.player_id} />
+              <div className="who"><div className="nm">{p.jogador}<small>{p.time} x {p.adversario}</small></div>
+                <div className="ln">linha {p.linha}{p.linha_ref ? " ref" : ""} · L10 {num(p.l10)}</div></div>
+              <div className="ed"><div className="l">PROJ</div><div className={`v ${(p.diff ?? 0) > 0 ? "over" : "under"}`}>{num(p.proj)}</div>
+                <div className="small"><SealBadge s={p.selo}>{p.lado === "over" ? "▲" : "▼"} {Math.round(100 * (p.chance ?? 0))}%</SealBadge></div></div>
+            </div>))}
+          </div>
+        </>
+      )}
 
       <h2>Jogos do dia</h2>
       <div className="games">

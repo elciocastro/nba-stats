@@ -8,7 +8,7 @@ import {
 import { createColumnHelper, flexRender, getCoreRowModel, getSortedRowModel, SortingState, useReactTable } from "@tanstack/react-table";
 import { api, Detalhe, JogoLog } from "../api";
 import { usePrefs } from "../App";
-import { ddmm, heat, num, pct, Photo, SealBadge } from "../components";
+import { ddmm, heat, num, pct, Photo, SealBadge, Star, useFavs } from "../components";
 
 const MARKETS: Record<string, string> = {
   pts: "Pontos", reb: "Rebotes", ast: "Assist.", pra: "PRA", pr: "PR", pa: "PA", ra: "RA", fg3m: "3FM",
@@ -31,7 +31,7 @@ export default function JogadorPage() {
 
   return (
     <>
-      <Link to="/" className="muted small">← Início</Link>
+      <Link to="/props" className="muted small">← Props</Link>
       <div className="tabs" style={{ margin: "10px 0" }}>
         {Object.entries(MARKETS).map(([k, v]) => (
           <button key={k} className={`tab ${k === mercado ? "on" : ""}`} onClick={() => setSp({ mercado: k })}>{v}</button>
@@ -45,6 +45,7 @@ export default function JogadorPage() {
 }
 
 function Body({ d, mercado, data }: { d: Detalhe; mercado: string; data: string }) {
+  const fav = useFavs();
   const { atual, anterior } = d.rotulos;
   const [win, setWin] = useState("L10");
   const [split, setSplit] = useState<string | null>(null);
@@ -91,7 +92,8 @@ function Body({ d, mercado, data }: { d: Detalhe; mercado: string; data: string 
       <div className="hero">
         <Photo id={d.player_id} big />
         <div>
-          <div className="n">{d.jogador} <SealBadge s={d.selo} /></div>
+          <div className="n">{d.jogador} <SealBadge s={d.selo} />
+            <Star on={fav.has("jogador", d.player_id)} onClick={() => fav.toggle("jogador", d.player_id, d.jogador)} /></div>
           <div className="muted">{d.time} x {d.adversario} · {MARKETS[mercado]} · {d.grupo ?? "?"} / {d.posicao_est ?? "?"} (estimada) · {d.jogo.status}
             {d.jogo.validacao && <span className={`chip ${d.jogo.validacao.status === "validada" ? "ok" : "hot"}`} style={{ marginLeft: 8 }}
               title={d.jogo.validacao.motivo}>{d.jogo.validacao.status}</span>}</div>
