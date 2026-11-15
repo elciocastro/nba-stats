@@ -34,6 +34,7 @@ from nbastats.metrics import destaques as dq
 from nbastats.metrics import favoritos as fv
 from nbastats.metrics import filtros as fl
 from nbastats.metrics import historico as hs
+from nbastats.metrics import liga as lg
 from nbastats.metrics import noticias as nt
 from nbastats.metrics import ranking as rk
 from nbastats.metrics import sistema as si
@@ -541,8 +542,10 @@ def trends(data: str | None = None, conn=Depends(get_conn)):
     return cp.trends(conn, _day(data), load_matchup_rules())
 
 
-@app.get("/api/noticias")
+@app.get("/api/lesoes")
+@app.get("/api/noticias", include_in_schema=False)  # nome antigo
 def news(data: str | None = None, conn=Depends(get_conn)):
+    """Mudanças entre os dois últimos injury reports e quem pode voltar."""
     day = _day(data)
     return {**nt.changes(conn, day), "relatorios": nt.reports_for(conn, day), "retornos": nt.returns(conn, day)}
 
@@ -551,9 +554,10 @@ def news(data: str | None = None, conn=Depends(get_conn)):
 def update(forcar: bool = False, conn=Depends(get_conn)):
     """Estatísticas recentes, agenda e injury report (como o botão do Streamlit)."""
     from nbastats.ingest import refresh
-    from nbastats.sources import build_injury_source, build_source
+    from nbastats.sources import build_injury_source, build_news_source, build_source
     try:
-        res = refresh(conn, build_source(settings.fonte, settings), build_injury_source(), force=forcar)
+        res = refresh(conn, build_source(settings.fonte, settings), build_injury_source(), force=forcar,
+                      news_source=build_news_source())
     except Exception as exc:
         raise HTTPException(502, f"Falhou: {exc}")
     ap.settle_bets(conn, ap.load_bet_config())
@@ -573,6 +577,12 @@ def _guardar_previsoes(conn, day: str, mercado: str, report) -> None:
 class Filtro(BaseModel):
     nome: str
     params: dict[str, Any]
+
+
+@app.get("/api/liga")
+def league(data: str | None = None, conn=Depends(get_conn)):
+    """Última rodada, destaques, classificação, líderes, manchetes e transações."""
+    return lg.overview(conn, _day(data))
 
 
 @app.get("/api/filtros")

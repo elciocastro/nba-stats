@@ -12,7 +12,7 @@ from collections.abc import Iterable
 from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
-from ..sources.base import DataSource, InjurySource
+from ..sources.base import DataSource, InjurySource, NewsSource
 from ..sources.injury_report import normalize_name
 
 BATCH = 500
@@ -252,6 +252,27 @@ def sync_injuries(conn, source: InjurySource) -> dict[str, int]:
     return _logged(conn, "injury", {}, work)
 
 
+def sync_news(conn, source: NewsSource, transacoes: bool = True, today: date | None = None) -> dict[str, int]:
+    """Grava as manchetes e, se ``transacoes``, as movimentações da temporada."""
+    today = today or date.today()
+
+    def work() -> dict[str, int]:
+        now = _now()
+        rows = [{"id": n["id"], "published_at": n.get("published_at"), "tipo": n.get("tipo"), "titulo": n["titulo"],
+                 "resumo": n.get("resumo"), "url": n.get("url"), "imagem": n.get("imagem"),
+                 "times": json.dumps(n.get("times") or []), "fetched_at": now} for n in source.news()]
+        n_news = _upsert(conn, "news", rows)
+        n_tx = 0
+        if transacoes:
+            season = today.year if today.month >= 7 else today.year - 1
+            tx = [{k: t.get(k) for k in ("id", "date", "tipo", "team_id", "player_id", "grupo", "descricao")}
+                  for t in source.transactions(since=f"{season}-07-01")]
+            n_tx = _upsert(conn, "transactions", tx)
+        return {"games": 0, "stats": n_news + n_tx, "noticias": n_news, "transacoes": n_tx}
+
+    return _logged(conn, "news", {"transacoes": transacoes}, work)
+
+
 def last_refresh(conn) -> str | None:
     """Quando terminou a última atualização completa bem-sucedida (UTC, ISO)."""
     row = conn.execute(
@@ -262,7 +283,8 @@ def last_refresh(conn) -> str | None:
 
 def refresh(conn, source: DataSource, injury_source: InjurySource | None,
             min_interval_min: float = 15, force: bool = False,
-            today: date | None = None, now: datetime | None = None) -> dict[str, Any]:
+            today: date | None = None, now: datetime | None = None,
+            news_source: NewsSource | None = None) -> dict[str, Any]:
     """Atualização do dia: estatísticas dos últimos 2 dias, agenda de hoje e
     amanhã e o injury report. Se a última foi há menos de ``min_interval_min``
     minutos, não refaz (a menos que ``force``) e diz quando foi.
@@ -287,6 +309,16 @@ def refresh(conn, source: DataSource, injury_source: InjurySource | None,
             ((now - timedelta(hours=12)).isoformat(timespec="seconds"),)).fetchone()
         if not recent_zones:
             sync_shot_zones(conn, source, season)
+        if news_source is not None:
+            # manchetes a cada atualização; transações (arquivo de ~4 MB) a cada 3 h.
+            # Falha aqui fica no sync_log e não derruba a carga das estatísticas.
+            recent_tx = conn.execute(
+                "SELECT 1 FROM sync_log WHERE kind = 'news' AND status = 'ok' AND params LIKE '%true%'"
+                " AND finished_at >= ?", ((now - timedelta(hours=3)).isoformat(timespec="seconds"),)).fetchone()
+            try:
+                sync_news(conn, news_source, transacoes=not recent_tx, today=today)
+            except Exception:  # noqa: BLE001
+                pass
         return {"games": stats["games"] + agenda["games"], "stats": stats["stats"],
                 "lesoes": inj.get("injuries", 0), "relatorio": inj.get("report")}
 

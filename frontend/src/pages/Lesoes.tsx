@@ -1,4 +1,4 @@
-// Notícias de lesão: mudanças entre os dois últimos injury reports e quem pode voltar.
+// Lesões: mudanças entre os dois últimos injury reports e quem pode voltar.
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
@@ -11,17 +11,18 @@ const ICON: Record<string, string> = { entrou: "🆕", saiu: "✅", melhorou: "�
 const motivo = (m: string | null) => (m ?? "").replace(/^Injury\/Illness-/, "").replace(/([a-z])([A-Z])/g, "$1 $2").replace(/;/g, "; ").replace(/-/g, " · ");
 const ST: Record<string, string> = { Out: "bad", Doubtful: "bad", Questionable: "hot", Probable: "ok", Available: "ok" };
 
-export default function Noticias() {
+export default function Lesoes() {
   const { data } = usePrefs();
   const nav = useNavigate();
   const [mins, setMins] = useState(28);
-  const q = useQuery({ queryKey: ["noticias", data], queryFn: () => api2.noticias(data), refetchInterval: 5 * 60_000 });
+  const q = useQuery({ queryKey: ["lesoes", data], queryFn: () => api2.lesoes(data), refetchInterval: 5 * 60_000 });
   if (q.isLoading) return <div className="loading">Carregando…</div>;
   if (q.error) return <div className="err">{String((q.error as Error).message)}</div>;
   const n = q.data!;
   return (
     <>
-      <h1>Notícias de lesão</h1>
+      <h1>Lesões</h1>
+      <p className="muted small" style={{ marginTop: 4 }}>Injury report oficial da NBA: quem ganha com cada desfalque, o que mudou no último relatório e quem pode voltar.</p>
       <Cascata />
       {!n.atual ? <p className="muted">Nenhum injury report guardado para esta data. Use “Atualizar dados”.</p> : (
         <>

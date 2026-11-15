@@ -191,7 +191,7 @@ final no ritmo atual e a chance de bater; atualiza a cada 30 s.
 **Apostas** (registro, conferência, acerto real × chance calculada, lucro,
 ROI e desempenho por mercado/unidades/faixa de chance; registra-se pela página
 do jogador), **Comparar** (jogador × jogador, time × time, tendências) e
-**Notícias** (o que mudou no injury report e quem pode voltar). O botão
+**Lesões** (efeito cascata, o que mudou no injury report e quem pode voltar). O botão
 "Atualizar dados" no topo faz a mesma carga do `nbastats atualizar`. Só no
 **Ranking** (temporada, últimos N, diferença, por 36 minutos, playoffs,
 arremesso) e **Jogos** (box score completo). O Streamlit ainda
@@ -206,13 +206,21 @@ uvicorn nbastats.api.app:app --port 8100     # API + site em http://localhost:81
 
 API documentada em `/api/docs`.
 
+### Página inicial
+
+Abre na hora com a liga: última rodada (placar e cestinhas), destaques pelo
+Game Score, classificação, líderes, manchetes da ESPN e transações da NBA em
+português. As projeções do dia ("Hoje") carregam à parte. Manchetes e
+transações vêm junto do `nbastats atualizar`; para buscar só elas:
+`nbastats noticias`.
+
 ### Calibração, cascata, alertas e app no celular
 
-- **Calibração** (menu): "quando o site disse X%, acertou quanto?", com o
+- **Conferência das estatísticas** (menu da conta ou "Mais"): "quando o site disse X%, acertou quanto?", com o
   backtest da temporada (`nbastats calibracao`, diário no cron), as previsões
   guardadas antes de cada jogo (`nbastats previsoes`, de hora em hora) e as
   apostas registradas.
-- **Notícias → Efeito cascata**: quem ganha com cada desfalque do dia (média
+- **Lesões → Efeito cascata**: quem ganha com cada desfalque do dia (média
   com/sem o companheiro e projeção contra a linha).
 - **Apostas**: motivo (etiquetas) e nota em cada aposta, desempenho por
   motivo, "Minhas/Todas" com login e **jogo responsável** (limites por dia e
@@ -334,7 +342,7 @@ src/nbastats/
   ia.py                    relatório BetânIAG com IA (opcional)
   cli.py                   comando nbastats
 tests/                     pytest com fontes falsas e respostas reais gravadas
-docs/decisoes/             0001 a 0012: decisões, métodos e resultados
+docs/decisoes/             0001 a 0013: decisões, métodos e resultados
 docs/BACKLOG.md            o que foi feito e o que falta, em fases
 ```
 

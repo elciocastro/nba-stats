@@ -72,3 +72,18 @@ class LiveSource(Protocol):
     """
 
     def live_games(self) -> list[dict[str, Any]]: ...
+
+
+class NewsSource(Protocol):
+    """Notícias e transações da liga (só para a página inicial).
+
+    ``news`` devolve as manchetes mais recentes: {id, published_at (ISO UTC),
+    tipo, titulo, resumo, url, imagem, times: [nomes]}. ``transactions``
+    devolve as movimentações de jogadores a partir de ``since`` (AAAA-MM-DD):
+    {id, date, tipo, team_id, player_id, grupo, descricao}; ``grupo`` junta as
+    linhas de uma mesma troca.
+    """
+
+    def news(self) -> list[dict[str, Any]]: ...
+
+    def transactions(self, *, since: str) -> list[dict[str, Any]]: ...
