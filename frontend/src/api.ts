@@ -136,3 +136,39 @@ export const aoVivo = (mercado: string, alvo: string) =>
   fetch(`/api/aovivo?mercado=${mercado}&alvo=${alvo}`, { headers: { "X-Senha": localStorage.getItem("senha") ?? "" } })
     .then(async (r) => { if (r.status === 401) throw new SenhaError("senha"); if (!r.ok) throw new Error((await r.json()).detail); return r.json(); }) as
     Promise<{ data: string | null; jogos: LiveGame[]; destaques: LivePlayer[]; atualizado_ha: number }>;
+
+// ---------- apostas, comparar, notícias ----------
+export type Bet = { id: number; date: string; jogador: string; player_id: number; market: string; side: string;
+  line: number; odd: number; units: number; bookmaker: string | null; prob: number | null; proj: number | null;
+  status: string; actual: number | null; profit_units: number | null; casa_time: string | null; fora_time: string | null };
+export type Resumo = { apostas: number; pendentes: number; conferidas: number; ganhas: number; acerto_pct: number | null;
+  chance_media_pct: number | null; unidades_apostadas: number; lucro_unidades: number; roi_pct: number | null };
+export type Desempenho = { geral: Resumo; mercado: Record<string, Resumo>; unidades: Record<string, Resumo>;
+  faixa_chance: Record<string, Resumo>; lado: Record<string, Resumo>; curva: { data: string; lucro_acumulado: number }[] };
+export type TeamSide = { time: string; jogos: number; ritmo: number | null; saldo: number | null; pts_feitos: number | null;
+  pts_cedidos: number | null; dvp: { grupo: string; stat: string; media: number | null; rank: number | null; media_rec: number | null; rank_rec: number | null }[] };
+export type Trend = { player_id: number; jogador: string; time: string; l5: number; temporada: number; dif: number; pra_l5: number };
+export type Noticias = { atual: string | null; anterior: string | null;
+  mudancas: { tipo: string; player_id: number | null; jogador: string; time: string; antes: string | null; agora: string | null; motivo: string | null }[];
+  relatorios: { published_at: string; nomes: number }[];
+  retornos: { player_id: number; jogador: string; time: string; status: string; jogos_fora: number | null; minutos_antes: number;
+              pts: number; reb: number; ast: number; pra: number; pra_por_min: number; motivo: string | null }[] };
+
+const j = <T,>(path: string, init?: RequestInit) =>
+  fetch(path, { ...init, headers: { "Content-Type": "application/json", "X-Senha": localStorage.getItem("senha") ?? "" } })
+    .then(async (r) => { if (r.status === 401) throw new SenhaError("senha"); if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail ?? r.statusText); return r.json() as Promise<T>; });
+
+export const api2 = {
+  apostas: (status?: string) => j<{ apostas: Bet[]; desempenho: Desempenho; config: { valor_unidade: number | null; moeda: string; unidades: number[] } }>(
+    `/api/apostas${status ? `?status=${status}` : ""}`),
+  apostar: (b: { data: string; player_id: number; mercado: string; lado: string; linha: number; odd: number; unidades: number; casa?: string; obs?: string }) =>
+    j<{ id: number; chance: number | null }>("/api/apostas", { method: "POST", body: JSON.stringify(b) }),
+  apagarAposta: (id: number) => j(`/api/apostas/${id}`, { method: "DELETE" }),
+  conferir: () => j<{ conferidas: Record<string, number> }>("/api/apostas/conferir", { method: "POST" }),
+  times: () => j<{ id: number; sigla: string; nome: string }[]>("/api/times"),
+  compararTimes: (a: number, b: number, data: string) => j<{ temporada: number; liga_ritmo: number; a: TeamSide; b: TeamSide }>(`/api/comparar/times?a=${a}&b=${b}&data=${data}`),
+  tendencias: (data: string) => j<{ minutos: Trend[]; minutos_queda: Trend[]; uso: Trend[];
+    defesas: { time: string; grupo: string; pra_temporada: number; pra_recente: number; dif: number; rank_recente: number }[] }>(`/api/tendencias?data=${data}`),
+  noticias: (data: string) => j<Noticias>(`/api/noticias?data=${data}`),
+  atualizar: (forcar = false) => j<{ pulado: boolean; minutos?: number; relatorio?: string | null }>(`/api/atualizar?forcar=${forcar}`, { method: "POST" }),
+};

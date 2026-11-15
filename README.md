@@ -177,6 +177,12 @@ times e jogos, guardados no banco e compartilhados entre quem usa o site.
 **Ao Vivo**: placar dos jogos e, por jogador, o parcial em pontos, rebotes,
 assistências, bolas de 3 ou PRA contra a linha (ou a média), a projeção do
 final no ritmo atual e a chance de bater; atualiza a cada 30 s.
+**Apostas** (registro, conferência, acerto real × chance calculada, lucro,
+ROI e desempenho por mercado/unidades/faixa de chance; registra-se pela página
+do jogador), **Comparar** (jogador × jogador, time × time, tendências) e
+**Notícias** (o que mudou no injury report e quem pode voltar). O botão
+"Atualizar dados" no topo faz a mesma carga do `nbastats atualizar`. Só no
+Streamlit, por enquanto: Ranking e Jogo (box score).
 
 ```bash
 pip install -e ".[api]"

@@ -90,3 +90,27 @@ def test_linhas_em_lote_dvp_e_potenciais(client):
     d = client.get("/api/dvp", params=q).json()
     assert d["grupos"] and any(r["joga_hoje"] for r in d["linhas"])
     assert "jogadores" in client.get("/api/potenciais", params={"data": "2026-11-07"}).json()
+
+
+def test_apostas_pela_api(client):
+    q = {"data": "2026-11-07", "mercado": "pts"}
+    pid = client.get("/api/props", params=q).json()["jogadores"][0]["player_id"]
+    r = client.post("/api/apostas", json={**q, "player_id": pid, "lado": "over", "linha": 10.5, "odd": 1.9,
+                                          "unidades": 1, "casa": "X"}).json()
+    assert r["id"] and 0 < r["chance"] < 1                       # fotografia da chance no momento
+    assert client.post("/api/apostas", json={**q, "player_id": pid, "lado": "x", "linha": 1, "odd": 1.9}).status_code == 400
+    body = client.get("/api/apostas").json()
+    assert body["desempenho"]["geral"]["apostas"] == 1 and body["apostas"][0]["status"] == "pendente"
+    assert client.post("/api/apostas/conferir").json() == {"conferidas": {}}   # jogo ainda não aconteceu
+    client.delete(f"/api/apostas/{r['id']}")
+    assert client.get("/api/apostas").json()["apostas"] == []
+
+
+def test_comparar_tendencias_e_noticias(client):
+    ts = client.get("/api/times").json()
+    assert {t["sigla"] for t in ts} == {"AAA", "BBB", "CCC"}
+    r = client.get("/api/comparar/times", params={"a": 1, "b": 3, "data": "2026-11-07"}).json()
+    assert r["a"]["time"] == "AAA" and r["b"]["time"] == "CCC"
+    assert set(client.get("/api/tendencias", params={"data": "2026-11-07"}).json()) >= {"minutos", "defesas"}
+    n = client.get("/api/noticias", params={"data": "2026-11-07"}).json()
+    assert n["atual"] is None and n["relatorios"] == [] and "retornos" in n

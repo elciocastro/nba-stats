@@ -32,8 +32,9 @@ def reports_for(conn: sqlite3.Connection, day: str) -> list[dict[str, Any]]:
 def _entries(conn: sqlite3.Connection, report_id: int, day: str) -> dict[str, dict[str, Any]]:
     sql = """
         SELECT i.player_id, COALESCE(TRIM(p.first_name || ' ' || p.last_name), i.player_name) AS player_name,
-               i.status, i.reason, i.team_id, t.abbreviation AS time
-        FROM injuries i LEFT JOIN teams t ON t.id = i.team_id LEFT JOIN players p ON p.id = i.player_id
+               i.status, i.reason, COALESCE(i.team_id, p.team_id) AS team_id, t.abbreviation AS time
+        FROM injuries i LEFT JOIN players p ON p.id = i.player_id
+        LEFT JOIN teams t ON t.id = COALESCE(i.team_id, p.team_id)
         WHERE i.report_id = ? AND i.game_date = ?
     """
     return {str(r["player_id"] or r["player_name"]): dict(r) for r in conn.execute(sql, (report_id, day))}

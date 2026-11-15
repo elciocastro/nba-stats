@@ -1,11 +1,14 @@
 import { createContext, useContext, useState } from "react";
-import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
-import { BrowserRouter, NavLink, Route, Routes } from "react-router-dom";
-import { api, SenhaError } from "./api";
+import { QueryClient, QueryClientProvider, useMutation, useQuery } from "@tanstack/react-query";
+import { BrowserRouter, NavLink, Route, Routes, useLocation } from "react-router-dom";
+import { api, api2, SenhaError } from "./api";
 import Inicio from "./pages/Inicio";
 import JogadorPage from "./pages/Jogador";
 import Props from "./pages/Props";
 import AoVivo from "./pages/AoVivo";
+import Apostas from "./pages/Apostas";
+import Comparar from "./pages/Comparar";
+import Noticias from "./pages/Noticias";
 
 type Prefs = { data: string; setData: (d: string) => void; betaniag: boolean; setBetaniag: (b: boolean) => void };
 const Ctx = createContext<Prefs>(null!);
@@ -47,13 +50,17 @@ function Shell() {
   return (
     <Ctx.Provider value={{ data, setData, betaniag, setBetaniag }}>
       <header className="top">
-        <span className="brand">🏀 NBA Stats</span>
+        <span className="brand">🏀 <span className="lbl">NBA Stats</span></span>
         <nav className="nav">
           <NavLink to="/" end>Início</NavLink>
           <NavLink to="/props">Props</NavLink>
           <NavLink to="/aovivo">Ao Vivo</NavLink>
+          <NavLink to="/apostas">Apostas</NavLink>
+          <NavLink to="/comparar">Comparar</NavLink>
+          <NavLink to="/noticias">Notícias</NavLink>
         </nav>
         <span className="sp" />
+        <Atualizar />
         <label className="toggle"><input type="checkbox" checked={betaniag} onChange={(e) => setBetaniag(e.target.checked)} />BetânIAG</label>
         <input className="input" type="date" value={data} onChange={(e) => e.target.value && setData(e.target.value)} />
       </header>
@@ -63,14 +70,50 @@ function Shell() {
           <Route path="/jogador/:id" element={<JogadorPage />} />
           <Route path="/props" element={<Props />} />
           <Route path="/aovivo" element={<AoVivo />} />
+          <Route path="/apostas" element={<Apostas />} />
+          <Route path="/comparar" element={<Comparar />} />
+          <Route path="/noticias" element={<Noticias />} />
+          <Route path="/mais" element={<Mais />} />
         </Routes>
       </main>
       <nav className="bottom">
         <NavLink to="/" end><b>⌂</b>Início</NavLink>
         <NavLink to="/props"><b>▤</b>Props</NavLink>
         <NavLink to="/aovivo"><b>●</b>Ao Vivo</NavLink>
+        <NavLink to="/apostas"><b>$</b>Apostas</NavLink>
+        <MaisLink />
       </nav>
     </Ctx.Provider>
+  );
+}
+
+function Atualizar() {
+  const m = useMutation({
+    mutationFn: () => api2.atualizar(true),
+    onSuccess: () => { qc.invalidateQueries(); setTimeout(() => m.reset(), 4000); },
+  });
+  const label = m.isPending ? "Atualizando…" : m.isSuccess ? "Atualizado ✓" : m.isError ? "Falhou" : "Atualizar dados";
+  return <button className="btn upd" disabled={m.isPending} title={m.isError ? String((m.error as Error).message) : "Box scores, injury report e escalações"}
+    onClick={() => m.mutate()}>{m.isPending ? "⟳" : "↻"} <span className="lbl">{label}</span></button>;
+}
+
+function MaisLink() {
+  const { pathname } = useLocation();
+  const on = ["/mais", "/comparar", "/noticias"].includes(pathname);
+  return <NavLink to="/mais" className={on ? "active" : ""}><b>⋯</b>Mais</NavLink>;
+}
+
+function Mais() {
+  const items = [["/comparar", "⇄", "Comparar", "Jogador × jogador, time × time e tendências"],
+                 ["/noticias", "✚", "Notícias", "Mudanças no injury report e quem pode voltar"]];
+  return (
+    <>
+      <h1>Mais</h1>
+      <div className="games">{items.map(([to, i, t, s]) => (
+        <NavLink key={to} to={to} className="game" style={{ color: "inherit" }}>
+          <b style={{ fontSize: "1.1rem" }}>{i} {t}</b><div className="d">{s}</div></NavLink>))}
+      </div>
+    </>
   );
 }
 
