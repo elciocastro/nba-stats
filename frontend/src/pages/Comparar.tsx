@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Bar, BarChart, CartesianGrid, Legend, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { api, api2, Jogador, TeamSide } from "../api";
-import { usePrefs } from "../App";
+import { usePrefs, Esqueleto } from "../App";
 import { heat, num, Photo } from "../components";
 import { MARKETS } from "./Props";
 
@@ -41,7 +41,7 @@ function Jogadores() {
     <>
       <div className="tabs" style={{ marginBottom: 10 }}>{Object.entries(MARKETS).map(([k, v]) =>
         <button key={k} className={`tab ${k === mercado ? "on" : ""}`} onClick={() => setMercado(k)}>{v}</button>)}</div>
-      {q.isLoading && <div className="loading">Calculando…</div>}
+      {q.isLoading && <Esqueleto />}
       {pa && pb && (
         <>
           <div className="row" style={{ marginBottom: 12 }}>
@@ -166,7 +166,7 @@ function Tendencias() {
   const { data } = usePrefs();
   const nav = useNavigate();
   const q = useQuery({ queryKey: ["tendencias", data], queryFn: () => api2.tendencias(data) });
-  if (q.isLoading) return <div className="loading">Calculando…</div>;
+  if (q.isLoading) return <Esqueleto />;
   const t = q.data!;
   const list = (title: string, rows: typeof t.minutos, unit: string) => (
     <div><div className="small muted" style={{ marginBottom: 4 }}>{title}</div>

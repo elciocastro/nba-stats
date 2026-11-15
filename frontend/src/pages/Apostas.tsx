@@ -3,7 +3,8 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { api2, Bet, Resumo } from "../api";
-import { baixarCsv, ddmm } from "../components";
+import { baixarCsv, ddmm, Num } from "../components";
+import { Esqueleto } from "../App";
 
 const MK: Record<string, string> = { pts: "Pontos", reb: "Rebotes", ast: "Assist.", pra: "PRA", pr: "PR", pa: "PA", ra: "RA",
   fg3m: "3FM", fg3a: "3FA", fg2m: "2FM", fg2a: "2FA", ftm: "FTM", fta: "FTA", stl: "Roubos", blk: "Tocos", turnover: "Turnovers" };
@@ -18,7 +19,7 @@ export default function Apostas() {
   const conferir = useMutation({ mutationFn: api2.conferir, onSuccess: () => qc.invalidateQueries({ queryKey: ["apostas"] }) });
   const apagar = useMutation({ mutationFn: api2.apagarAposta, onSuccess: () => qc.invalidateQueries({ queryKey: ["apostas"] }) });
 
-  if (q.isLoading) return <div className="loading">Carregando…</div>;
+  if (q.isLoading) return <Esqueleto />;
   if (q.error) return <div className="err">{String((q.error as Error).message)}</div>;
   const { apostas, desempenho: d, config, limites: lim, por_usuario } = q.data!;
   const g = d.geral;
@@ -44,12 +45,12 @@ export default function Apostas() {
       ) : (
         <>
           <div className="kpis" style={{ marginTop: 12 }}>
-            <div className="kpi"><div className="l">Apostas</div><div className="v">{g.apostas}</div><div className="s">{g.pendentes} pendentes</div></div>
-            <div className="kpi"><div className="l">Acerto</div><div className="v">{g.acerto_pct == null ? "—" : `${Math.round(g.acerto_pct)}%`}</div>
+            <div className="kpi"><div className="l">Apostas</div><div className="v"><Num v={g.apostas} /></div><div className="s">{g.pendentes} pendentes</div></div>
+            <div className="kpi"><div className="l">Acerto</div><div className="v"><Num v={g.acerto_pct == null ? null : Math.round(g.acerto_pct)} suffix="%" /></div>
               <div className="s">{g.chance_media_pct == null ? "" : `chance média ${Math.round(g.chance_media_pct)}%`}</div></div>
-            <div className="kpi"><div className="l">Lucro</div><div className={`v ${cls}`}>{g.lucro_unidades > 0 ? "+" : ""}{g.lucro_unidades.toFixed(2)} u</div>
+            <div className="kpi"><div className="l">Lucro</div><div className={`v ${cls}`}><Num v={g.lucro_unidades} decimals={2} prefix={g.lucro_unidades > 0 ? "+" : ""} suffix=" u" /></div>
               <div className="s">{config.valor_unidade ? `${config.moeda} ${(g.lucro_unidades * config.valor_unidade).toFixed(2)}` : ""}</div></div>
-            <div className="kpi"><div className="l">ROI</div><div className={`v ${cls}`}>{g.roi_pct == null ? "—" : `${g.roi_pct > 0 ? "+" : ""}${g.roi_pct.toFixed(1)}%`}</div>
+            <div className="kpi"><div className="l">ROI</div><div className={`v ${cls}`}><Num v={g.roi_pct} decimals={1} prefix={(g.roi_pct ?? 0) > 0 ? "+" : ""} suffix="%" /></div>
               <div className="s">{g.unidades_apostadas} u apostadas</div></div>
           </div>
           <p className="muted small">Acerto real × chance média calculada: se o acerto fica abaixo da chance por muitas apostas, o método está otimista. ROI só ganha significado depois de dezenas de apostas.</p>

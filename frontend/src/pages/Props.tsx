@@ -5,7 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { ColumnDef, createColumnHelper } from "@tanstack/react-table";
 import { api, Filtro, FiltroParams, filtros, Jogador, Jogo, LinhaIn, Potencial } from "../api";
-import { usePrefs } from "../App";
+import { usePrefs, Esqueleto } from "../App";
 import { baixarCsv, Bars, DataTable, heat, num, Photo, SealBadge, Star, useFavs, useMobile } from "../components";
 
 export const MARKETS: Record<string, string> = {
@@ -90,7 +90,7 @@ export default function Props() {
         </div>
       )}
 
-      {usesPlayers && q.isLoading && <div className="loading">Calculando projeções…</div>}
+      {usesPlayers && q.isLoading && <Esqueleto />}
       {usesPlayers && q.error && <div className="err">{String((q.error as Error).message)}</div>}
       {usesPlayers && q.data && !q.data.jogos.length && <div className="muted">Nenhum jogo nesta data.</div>}
       {aba === "props" && q.data && <PropsTab players={players} mercado={mercado} temp={q.data.temporada} ant={q.data.anterior} />}
@@ -333,7 +333,7 @@ function DvpTab({ mercado }: { mercado: string }) {
         <label className="toggle"><input type="checkbox" checked={soHoje} onChange={(e) => setSoHoje(e.target.checked)} />Só quem joga hoje ●</label>
         <span className="muted small">Média cedida por jogo a cada posição em {MARKETS[mercado]}. Rank 30 = cede mais (verde = alvo bom).</span>
       </div>
-      {q.isLoading ? <div className="loading">Calculando…</div> :
+      {q.isLoading ? <Esqueleto /> :
         <DataTable data={rows} columns={columns} cellClass={cls} initialSort={[{ id: `${q.data?.grupos[0]}_rank`, desc: true }]} maxHeight={900} />}
     </>
   );
@@ -367,7 +367,7 @@ function PotenciaisTab({ busca, setBusca }: { busca: string; setBusca: (s: strin
         <label className="toggle"><input type="checkbox" checked={soHoje} onChange={(e) => setSoHoje(e.target.checked)} />Só quem joga hoje</label>
         <span className="muted small">Últimos 10 jogos / temporada. Regras em <code>config/potencial.yaml</code>. Clique para abrir (se joga hoje).</span>
       </div>
-      {q.isLoading ? <div className="loading">Calculando…</div> :
+      {q.isLoading ? <Esqueleto /> :
         <DataTable data={rows} columns={columns} initialSort={[{ id: "nota", desc: true }]} maxHeight={900}
           onRow={(r) => r.joga_hoje && nav(`/jogador/${r.player_id}?mercado=pra`)} />}
       <p className="muted small"><Link to="/">← Início</Link></p>

@@ -7,7 +7,7 @@ import {
 } from "recharts";
 import { createColumnHelper, flexRender, getCoreRowModel, getSortedRowModel, SortingState, useReactTable } from "@tanstack/react-table";
 import { api, api2, Detalhe, JogoLog, LimiteError } from "../api";
-import { usePrefs } from "../App";
+import { usePrefs, Esqueleto } from "../App";
 import { ddmm, heat, num, pct, Photo, SealBadge, Star, useFavs } from "../components";
 
 const MARKETS: Record<string, string> = {
@@ -43,7 +43,7 @@ export default function JogadorPage() {
           <button key={k} className={`tab ${k === mercado ? "on" : ""}`} onClick={() => setSp({ mercado: k })}>{v}</button>
         ))}
       </div>
-      {q.isLoading && <div className="loading">Carregando…</div>}
+      {q.isLoading && <Esqueleto />}
       {q.error && <div className="err">{String((q.error as Error).message)}</div>}
       {q.data && <Body d={q.data} mercado={mercado} data={data} />}
     </>

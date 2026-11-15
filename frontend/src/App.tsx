@@ -35,6 +35,11 @@ function Login({ modo, onOk, site }: { modo: Modo; onOk: () => void; site?: Site
   const [busy, setBusy] = useState(false);
   return (
     <div className="login-bg">
+    {!poucoMovimento() && (
+      <Suspense fallback={null}>
+        <Raios className="raios" raysOrigin="top-center" raysColor={site?.cor_destaque ?? "#f97316"} raysSpeed={0.6}
+          lightSpread={0.9} rayLength={1.6} intensity={0.75} followMouse mouseInfluence={0.06} noiseAmount={0.05} />
+      </Suspense>)}
     <Quadra />
     <form className="login cartao" onSubmit={async (e) => {
       e.preventDefault();
@@ -97,7 +102,16 @@ function TrocarSenha({ obrigatoria, onOk }: { obrigatoria?: boolean; onOk: () =>
 
 const sair = async () => { await api.sair(); qc.clear(); window.location.assign("/"); };
 
+/** Carregando: blocos no formato do conteúdo, em vez de texto solto. */
+export function Esqueleto({ linhas = 4 }: { linhas?: number }) {
+  return <div className="esqueleto" aria-busy="true" aria-label="Carregando">{Array.from({ length: linhas }, (_, i) => <i key={i} />)}</div>;
+}
+
+const Raios = lazy(() => import("./reactbits/LightRays"));
+const poucoMovimento = () => { try { return window.matchMedia("(prefers-reduced-motion: reduce)").matches; } catch { return true; } };
+
 function Shell() {
+  const { pathname } = useLocation();
   const [data, setData] = useState(today());
   const [betaniag, setB] = useState(() => { try { return localStorage.getItem("betaniag") === "1"; } catch { return false; } });
   const setBetaniag = (b: boolean) => { try { localStorage.setItem("betaniag", b ? "1" : "0"); } catch { /* sem storage */ } setB(b); };
@@ -133,7 +147,8 @@ function Shell() {
       </header>
       {m?.alerta && <div className="alerta">⚠ {m.alerta}</div>}
       <main className="main">
-        <Suspense fallback={<div className="carregando"><BolaQuicando size={30} />Carregando…</div>}>
+        <Suspense fallback={<Esqueleto />}>
+        <div className="pagina" key={pathname.split("/")[1] || "inicio"}>
         <Routes>
           <Route path="/" element={<Inicio />} />
           <Route path="/jogador/:id" element={<JogadorPage />} />
@@ -152,6 +167,7 @@ function Shell() {
           <Route path="/conta" element={<TrocarSenha onOk={() => null} />} />
           <Route path="/mais" element={<Mais meta={m} />} />
         </Routes>
+        </div>
         </Suspense>
       </main>
       <nav className="bottom">

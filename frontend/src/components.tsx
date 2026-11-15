@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { headshot, Selo } from "./api";
 
 // Taxa de over -> cor (verde forte a vermelho forte). Só visual.
@@ -9,6 +9,19 @@ export function heat(pct: number | null | undefined): { background: string; colo
   if (pct >= 43) return { background: "var(--h-mid)", color: "var(--h-mid-t)" };
   if (pct >= 31) return { background: "var(--h-bad)", color: "var(--h-bad-t)" };
   return { background: "var(--h-worst)", color: "var(--h-worst-t)" };
+}
+
+/** Número que rola até o valor uma vez, ao aparecer (React Bits CountUp). */
+const CountUp = lazy(() => import("./reactbits/CountUp"));
+export function Num({ v, decimals = 0, prefix = "", suffix = "" }: { v: number | null | undefined; decimals?: number; prefix?: string; suffix?: string }) {
+  if (v == null || !Number.isFinite(v)) return <>—</>;
+  const txt = `${prefix}${v.toFixed(decimals)}${suffix}`;
+  return (
+    <Suspense fallback={<>{txt}</>}>
+      <CountUp to={Math.abs(v)} prefix={`${v < 0 ? "-" : ""}${prefix}`} suffix={suffix} decimals={decimals}
+        mode="roll" trigger="load" duration={0.7} easing="expo" />
+    </Suspense>
+  );
 }
 
 export const pct = (x: number | null | undefined) => (x === null || x === undefined ? "—" : `${Math.round(100 * x)}%`);
