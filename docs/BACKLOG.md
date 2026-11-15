@@ -6,22 +6,23 @@ Legenda: **[P0]** bloqueia o resto · **[P1]** necessário para o MVP ·
 
 ## Estado atual
 
-Atualizado em 2026-11-14 (106 testes). Detalhes do que o site faz no README.
+Atualizado em 2026-11-14 (118 testes). Detalhes do que o site faz no README.
 
 - **Dados**: nba_api validada contra o nba.com (seção 1); duas temporadas na
   base; agenda, injury report oficial (a cada 15 min) e zonas de arremesso.
 - **Análise**: 18 mercados, DvP, posição estimada, projeção calibrada (2% a
   4% melhor que o L10), margem e risco de blowout, com/sem companheiro,
   chance de over/under calibrada contra a linha.
-- **Site**: página Props dinâmica (tema escuro, abas, barras contra a linha,
-  detalhe com linha e odds), Linhas, Matchups (tabela), DvP e as antigas.
+- **Site**: Props com tabela de calor no computador e cartões no celular,
+  página do jogador (H2H, recortes, minutos), Comparar, Notícias, Apostas,
+  Linhas, Matchups (tabela), DvP e as antigas. Protocolo BetânIAG e IA
+  configurados e desligados por padrão.
 - **Feito por PR**: #1 fonte nba_api · #2 matchups e DvP · #3 fase 1 (dados)
-  · #4 fase 2 (projeção) · #5 fase 3 (linhas e visual) · fase 4 (apostas)
-  no PR seguinte.
+  · #4 fase 2 (projeção) · #5 fase 3 (linhas e visual) · #6 fase 4
+  (apostas) · fase 5 (BetânIAG, H2H, computador) no PR seguinte.
 
-**Próximo**: fase 5 (Protocolo BetânIAG: texto recebido em 2026-11-14,
-proposta em `docs/decisoes/0008-protocolo-betaniag.md`) e fase 3b (API de
-odds, depende das casas).
+**Próximo**: fase 3b (API de odds, depende das casas), validar as faixas do
+selo com o registro de apostas (5i) e mostrar ao colega (2.1).
 
 ---
 
@@ -151,19 +152,26 @@ ritmo, saldo, desfalques, nota por critério, agenda, telas Matchups e DvP,
 - [ ] 4d. CLV (closing line value): guardar a linha de fechamento e comparar
   com a linha apostada. Depende da API de odds (3b).
 
-**Fase 5 — Protocolo BetânIAG** (análise e proposta em `docs/decisoes/0008-protocolo-betaniag.md`)
+**Fase 5 — Protocolo BetânIAG** (0008 e `docs/decisoes/0009-fase5-betaniag-desktop-h2h.md`)
 - [x] 5a. Texto do protocolo recebido e analisado.
-- [ ] 5b. **Pendente do colega**: tabela de faixas/cores/níveis (pilar 6),
-  regra de unidades, banca e se quer o relatório com IA.
-- [ ] 5c. Chance do mercado sem a margem da casa e vantagem (nossa chance −
-  mercado) no detalhe.
-- [ ] 5d. Selo BetânIAG nos cartões (cor, nível, unidade sugerida).
-- [ ] 5e. Checklist do protocolo no detalhe e selo "análise validada"
-  (injury report final).
-- [ ] 5f. Página Comparar: jogador × jogador, time × time, tendências.
-- [ ] 5g. (Opcional) Relatório BetânIAG com IA e pergunta livre.
-- [ ] 5h. Gestão de banca: limite por dia/jogo e alerta de apostas
-  correlacionadas.
+- [x] 5b. Respostas do colega (0009): paleta de cores, unidades em espera,
+  IA configurada sem executar, sem banca, futebol/MMA preparados.
+- [x] 5c. Chance do mercado sem a margem da casa e vantagem no checklist.
+- [x] 5d. Selo BetânIAG na lista (cor e nível; unidade sugerida desligada).
+- [x] 5e. Checklist do protocolo na página do jogador e selo de validação.
+- [x] 5f. Página Comparar: jogador × jogador, time × time, tendências.
+- [x] 5g. Relatório BetânIAG com IA e pergunta livre (desligado:
+  `ia.habilitado`, `ANTHROPIC_API_KEY`, `pip install -e ".[ia]"`).
+- [x] 5j. H2H em todas as temporadas; janelas temporada/H2H/L5/L10/L20/anterior.
+- [x] 5k. Notícias: mudanças entre injury reports e quem pode voltar, com
+  "PRA com X minutos".
+- [x] 5m. Página inicial com destaques: jogos do dia, melhores
+  oportunidades e jogadores em alta.
+- [x] 5n. Cores nos valores (jogo a jogo e H2H) contra a média do jogador.
+- [ ] 5i. Validar as faixas do selo e ligar a unidade sugerida quando o
+  registro de apostas tiver amostra (dezenas de apostas por faixa).
+- ~~5h. Gestão de banca~~: fora do escopo (o site é de estatística).
+- [ ] 5l. Futebol e MMA: só quando houver fonte de dados (YAML pronto).
 
 **Fase 6 — visual**
 - [x] 6a. Primeira versão dinâmica (página Props, fase 3d).
@@ -171,8 +179,13 @@ ritmo, saldo, desfalques, nota por critério, agenda, telas Matchups e DvP,
   filtros recolhidos, detalhe enxuto (conferido em 390 px e 1280 px).
 - [ ] 6d. Acesso pelo celular: rede espelhada do WSL ou `portproxy` (passo a
   passo no README); senha obrigatória antes de abrir para a rede.
-- [ ] 6c. Avaliar outro front (ex.: React) se o Streamlit limitar, junto com
-  a ida para o servidor (seção 6).
+- [x] 6e. Computador: tabela de calor (temporada, H2H, L5, L10, L20,
+  anterior, projeção, DvP), layout escolhido pelo navegador ou na barra
+  lateral, página do jogador em duas colunas (conferido em 1280 e 390 px).
+- [ ] 6c. **Trocar o front** (Streamlit limita interação: cada clique
+  recarrega a página, sem hover, tabelas e gráficos pouco customizáveis).
+  Proposta: API FastAPI sobre `metrics/` + front React, página a página
+  (Início e Jogador primeiro). Aguardando decisão.
 
 ## 4. Métricas e análises — [P1] [?]
 
@@ -180,9 +193,9 @@ Dependem do item 2.3. Candidatas:
 
 - [ ] **4.1 Médias por 36 minutos** (compara reservas com titulares).
 - [ ] **4.2 Porcentagens de arremesso** (FG%, 3P%, FT%, TS%) nas tabelas.
-- [ ] **4.3 Comparar dois jogadores** lado a lado.
-- [ ] **4.4 Desempenho contra um adversário** (jogador X contra o time Y).
-- [ ] **4.5 Casa e fora, e últimos N jogos por time**.
+- [x] **4.3 Comparar dois jogadores** lado a lado (página Comparar).
+- [x] **4.4 Desempenho contra um adversário** (H2H na página do jogador).
+- [x] **4.5 Casa e fora** (recortes na página do jogador).
 - [ ] **4.6 Filtro de playoffs**: hoje as médias só usam temporada regular.
 - [ ] **4.7 Métricas avançadas** (usage, PER, on/off). Exigem outros
   endpoints; só se o colega pedir.

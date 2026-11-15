@@ -16,6 +16,7 @@ dependencies = [
 web = ["streamlit>=1.50"]
 nbaapi = ["nba_api>=1.10"]
 injury = ["pdfplumber>=0.11"]
+ia = ["anthropic"]
 dev = ["pytest>=8.0"]
 
 [project.scripts]

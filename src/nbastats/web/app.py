@@ -23,9 +23,13 @@ from nbastats.metrics.apostas import (
 )
 from nbastats.metrics.linhas import lines_for, save_line
 from nbastats.sources import build_injury_source, build_source
+from nbastats.web import comparar as cmp_page
+from nbastats.web import inicio
 from nbastats.web import props
 
 st.set_page_config(page_title="NBA Stats", page_icon="🏀", layout="wide")
+st.html("<style>@media (min-width: 900px) { .block-container { padding-left: 2rem; "
+        "padding-right: 2rem; max-width: 1600px; } }</style>")
 settings = get_settings()
 
 
@@ -77,8 +81,15 @@ def _refresh_box():
 
 
 _refresh_box()
-page = st.sidebar.radio("Página", ["Props", "Apostas", "Linhas", "Matchups (tabela)", "DvP",
-                                   "Ranking", "Jogador", "Potenciais", "Jogo"])
+page = st.sidebar.radio("Página", ["Início", "Props", "Comparar", "Notícias", "Apostas", "Linhas",
+                                   "Matchups (tabela)", "DvP", "Ranking", "Jogador", "Potenciais", "Jogo"],
+                        key="pagina")
+with st.sidebar.expander("Preferências", icon=":material/settings:"):
+    st.selectbox("Layout", ["Automático", "Celular", "Computador"], key="layout",
+                 help="Automático decide pelo navegador.")
+    _bcfg = props.bt.load_betaniag()
+    st.toggle("Protocolo BetânIAG", key="betaniag", value=bool(_bcfg.get("habilitado")),
+              help="Selo, checklist e relatório (config/betaniag.yaml). Vale para esta sessão.")
 season = st.sidebar.selectbox(
     "Temporada", available, format_func=lambda s: f"{s}-{str(s + 1)[-2:]}"
 )
@@ -148,6 +159,18 @@ def _explain(p, stat):
 
 if page == "Props":
     props.render(conn, last_refresh(conn))
+    st.stop()
+
+if page == "Início":
+    inicio.render(conn, last_refresh(conn))
+    st.stop()
+
+if page == "Comparar":
+    cmp_page.render(conn, last_refresh(conn))
+    st.stop()
+
+if page == "Notícias":
+    cmp_page.render_news(conn)
     st.stop()
 
 if page == "Apostas":
