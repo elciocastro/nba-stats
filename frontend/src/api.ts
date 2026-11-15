@@ -120,3 +120,19 @@ export const api = {
 };
 
 export const headshot = (id: number) => `https://cdn.nba.com/headshots/nba/latest/260x190/${id}.png`;
+
+export type LivePlayer = {
+  player_id: number; jogador: string; time: string; atual: number; minutos: number; restante: number;
+  final: number; chance: number | null; falta: number | null; status: string | null; alertas: string[];
+  alvo: number | null; linha_ref: boolean; media: number | null; proj_pre: number | null;
+  em_quadra: boolean; faltas: number; jogo?: string; game_id?: number;
+};
+export type LiveGame = {
+  game_id: number; status: number; status_texto: string; periodo: number; relogio_seg: number;
+  casa: string; fora: string; placar_casa: number; placar_fora: number; minutos_restantes: number;
+  jogadores: LivePlayer[];
+};
+export const aoVivo = (mercado: string, alvo: string) =>
+  fetch(`/api/aovivo?mercado=${mercado}&alvo=${alvo}`, { headers: { "X-Senha": localStorage.getItem("senha") ?? "" } })
+    .then(async (r) => { if (r.status === 401) throw new SenhaError("senha"); if (!r.ok) throw new Error((await r.json()).detail); return r.json(); }) as
+    Promise<{ data: string | null; jogos: LiveGame[]; destaques: LivePlayer[]; atualizado_ha: number }>;

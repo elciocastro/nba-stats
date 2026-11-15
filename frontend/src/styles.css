@@ -141,3 +141,17 @@ td input.cell.dirty { border-color: var(--amber); }
 .pname { display: flex; align-items: center; gap: 8px; min-width: 190px; }
 .pname img, .pname .ph { width: 28px; height: 28px; }
 @media (max-width: 760px) { .sticky-tools { top: 49px; } }
+.prog { position: relative; height: 8px; background: #1c2532; border-radius: 99px; margin: 8px 0 6px; overflow: visible; }
+.prog .proj { position: absolute; inset: 0 auto 0 0; background: rgba(59, 130, 246, .35); border-radius: 99px; }
+.prog .cur { position: absolute; inset: 0 auto 0 0; background: var(--accent); border-radius: 99px; transition: width .6s; }
+.prog .cur.done { background: var(--over); }
+.prog .tgt { position: absolute; top: -4px; bottom: -4px; width: 2px; background: #e6edf3; }
+table.t td .prog { margin: 0; }
+.pulse { color: var(--under); font-size: .8rem; animation: pulse 1.4s infinite; vertical-align: middle; }
+@keyframes pulse { 50% { opacity: .25; } }
+@media (max-width: 760px) { table.live .pc { display: none; } table.live td, table.live th { padding: 6px 5px; } }
+@media (max-width: 760px) {
+  table.live .pname { min-width: 0; gap: 2px; }
+  table.live td:first-child { white-space: normal; max-width: 128px; }
+  table.live .pname .muted { display: block; }
+}

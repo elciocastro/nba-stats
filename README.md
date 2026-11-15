@@ -174,6 +174,9 @@ jogo ordenável e colorida, "e se jogar X minutos", linha da casa) e **Props
 integrado**: abas Props, Linhas, Matchups, DvP e Potenciais com o mesmo dia,
 mercado, jogos, busca e filtro de favoritos. **Favoritos** (★) em jogadores,
 times e jogos, guardados no banco e compartilhados entre quem usa o site.
+**Ao Vivo**: placar dos jogos e, por jogador, o parcial em pontos, rebotes,
+assistências, bolas de 3 ou PRA contra a linha (ou a média), a projeção do
+final no ritmo atual e a chance de bater; atualiza a cada 30 s.
 
 ```bash
 pip install -e ".[api]"

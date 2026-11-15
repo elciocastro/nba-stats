@@ -24,6 +24,7 @@ from nbastats import db
 from nbastats.config import get_settings
 from nbastats.ingest import last_refresh
 from nbastats.metrics import betaniag as bt
+from nbastats.metrics import aovivo as av
 from nbastats.metrics import destaques as dq
 from nbastats.metrics import favoritos as fv
 from nbastats.metrics.comparar import _season_of
@@ -328,6 +329,48 @@ def del_fav(tipo: str, entity_id: int, conn=Depends(get_conn)):
     except ValueError as e:
         raise HTTPException(400, str(e))
     return fv.list_favorites(conn)
+
+
+# ---------- ao vivo ----------
+
+_LIVE: dict[str, Any] = {"t": 0.0, "dados": None}
+LIVE_TTL = 20  # segundos: o placar da NBA atualiza a cada ~10-20 s
+
+
+def get_live():
+    from nbastats.sources.nba_live import NbaLiveSource
+    return NbaLiveSource()
+
+
+def _live_games(source) -> list[dict[str, Any]]:
+    import time
+    if _LIVE["dados"] is None or time.time() - _LIVE["t"] > LIVE_TTL:
+        _LIVE["dados"], _LIVE["t"] = source.live_games(), time.time()
+    return _LIVE["dados"]
+
+
+@app.get("/api/aovivo")
+def ao_vivo(mercado: str = "pts", alvo: str = "linha", conn=Depends(get_conn), live=Depends(get_live)):
+    if mercado not in MARKETS or alvo not in ("linha", "media"):
+        raise HTTPException(400, "mercado ou alvo inválido")
+    try:
+        games = _live_games(live)
+    except Exception as exc:  # NBA fora do ar, rede etc.
+        raise HTTPException(502, f"Placar ao vivo indisponível: {exc}")
+    if not games:
+        return {"data": None, "jogos": [], "destaques": []}
+    day = games[0]["data"]
+    report = day_report(conn, day, mercado, last_refresh(conn), None)
+    pre = {p["player_id"]: {"proj": p.get("proj"), "min_esperado": (p.get("proj_detalhe") or {}).get("minutos"),
+                            "linha": p.get("linha"), "linha_ref": p.get("linha_ref"), "media": p.get("temporada"),
+                            "l10": p.get("l10"), "jogador": p["jogador"], "time": p["time"]}
+           for g in report for p in g["jogadores"]}
+    out = av.live_report(games, pre, mercado, load_projection_params(), alvo)
+    top = [{**p, "jogo": f"{g['fora']} @ {g['casa']}", "game_id": g["game_id"]}
+           for g in out if g["status"] == 2 for p in g["jogadores"]
+           if p["status"] in ("a caminho", "precisa acelerar")]
+    top.sort(key=lambda r: r["chance"] or 0, reverse=True)
+    return {"data": day, "jogos": out, "destaques": top[:15], "atualizado_ha": round(__import__("time").time() - _LIVE["t"])}
 
 
 # ---------- site (frontend/dist), se montado ----------
