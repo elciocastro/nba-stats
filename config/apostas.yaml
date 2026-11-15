@@ -27,3 +27,10 @@ jogo_responsavel:
   limite_unidades_dia: 5
   limite_unidades_semana: 15
   aviso_sequencia_perdas: 4   # derrotas seguidas
+
+# Página Valor (metrics/valor.py): edge = nossa chance − chance implícita (1/odd).
+# Entra quem passa do edge mínimo (0,03 = 3 pontos percentuais). Valor não é
+# certeza de acerto: é preço melhor que a chance.
+valor:
+  edge_minimo: 0.03
+  top: 40

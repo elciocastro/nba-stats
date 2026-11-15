@@ -42,6 +42,8 @@ _C = [
      {"min": 0, "max": 5000}),
     ("apostas", "jogo_responsavel.aviso_sequencia_perdas", "inteiro", "Aviso após derrotas seguidas", "0 = sem aviso.",
      {"min": 0, "max": 50}),
+    ("apostas", "valor.edge_minimo", "numero", "Edge mínimo (página Valor)",
+     "Nossa chance menos a chance da odd. 0,03 = 3 pontos percentuais.", {"min": 0, "max": 0.5}),
     ("alertas", "habilitado", "sim_nao", "Alertas no Telegram",
      "Precisa de NBASTATS_TELEGRAM_TOKEN e NBASTATS_TELEGRAM_CHAT no .env.", {}),
     ("alertas", "so_favoritos", "sim_nao", "Só favoritos", "Desligado: alerta de qualquer jogador.", {}),

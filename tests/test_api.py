@@ -302,3 +302,12 @@ def test_jogos_ao_vivo_e_por_time(client, base):  # noqa: F811
     assert t["jogos"] and {"adversario", "pro", "contra", "resultado"} <= set(t["jogos"][0])
     assert t["v"] + t["d"] == sum(1 for j in t["jogos"] if j["resultado"] and not j["playoffs"])
     assert client.get("/api/jogos/time/999999").status_code == 404
+
+
+def test_valor(client):
+    q = {"data": "2026-11-07", "mercado": "pts"}
+    pid = client.get("/api/props", params=q).json()["jogadores"][0]["player_id"]
+    client.put("/api/linhas", json={**q, "player_id": pid, "linha": 0.5, "odd_over": 1.5, "odd_under": 2.5})
+    r = client.get("/api/valor", params={"data": "2026-11-07"}).json()
+    assert r["edge_minimo"] == 0.03 and r["avaliadas"] >= 1
+    assert any(x["player_id"] == pid and x["lado"] == "over" for x in r["com_odd"])
