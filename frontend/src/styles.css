@@ -288,3 +288,7 @@ table.cls .pos { color: var(--muted); width: 18px; }
 .lid .r .v { margin-left: auto; font-weight: 800; font-variant-numeric: tabular-nums; }
 .secao { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
 .secao a { color: var(--brand); font-size: .78rem; }
+.upd-wrap { display: inline-flex; align-items: center; gap: 8px; }
+.upd-wrap .ult { color: var(--muted); font-size: .78rem; white-space: nowrap; }
+.upd-wrap .ult.aviso { color: var(--warn-t); }
+@media (max-width: 1240px) { .upd-wrap .ult { display: none; } }

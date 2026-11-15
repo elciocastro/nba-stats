@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { NavLink, useNavigate } from "react-router-dom";
 import { api, api2, Atuacao, Classif, Liga, Manchete, Oportunidade, Resultado, teamLogo } from "../api";
-import { usePrefs } from "../App";
+import { quandoAtualizou, usePrefs } from "../App";
 import { Bars, num, Photo, SealBadge, useFavs } from "../components";
 import { BolaQuicando } from "../marca";
 
@@ -12,9 +12,11 @@ export default function Inicio() {
   const { data } = usePrefs();
   const liga = useQuery({ queryKey: ["liga", data], queryFn: () => api2.liga(data), refetchInterval: 10 * 60_000 });
   const L = liga.data;
+  const meta = useQuery({ queryKey: ["meta"], queryFn: api.meta });
   return (
     <>
-      <div className="secao"><h1>Início</h1><span className="muted small">{dataLonga(data)}</span></div>
+      <div className="secao"><h1>Início</h1><span className="muted small">{dataLonga(data)}
+        {meta.data && <> · dados de {quandoAtualizou(meta.data.atualizado)}</>}</span></div>
       {liga.error && <div className="err" style={{ marginTop: 10 }}>{String((liga.error as Error).message)}</div>}
       {L && L.resultados.length > 0 && <Rodada l={L} />}
       <div className="home">
