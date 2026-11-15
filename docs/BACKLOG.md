@@ -1,12 +1,12 @@
 # Backlog do nba-stats
 
-Atualizado em 2026-11-14. Ordem de cima para baixo = ordem sugerida.
+Atualizado em 2026-11-15. Ordem de cima para baixo = ordem sugerida.
 Legenda: **[P0]** bloqueia o resto · **[P1]** necessário para o MVP ·
 **[P2]** melhoria · **[?]** depende de decisão com o colega.
 
 ## Estado atual
 
-Atualizado em 2026-11-14 (118 testes). Detalhes do que o site faz no README.
+Atualizado em 2026-11-15 (155 testes). Detalhes do que o site faz no README.
 
 - **Dados**: nba_api validada contra o nba.com (seção 1); duas temporadas na
   base; agenda, injury report oficial (a cada 15 min) e zonas de arremesso.
@@ -21,8 +21,13 @@ Atualizado em 2026-11-14 (118 testes). Detalhes do que o site faz no README.
   · #4 fase 2 (projeção) · #5 fase 3 (linhas e visual) · #6 fase 4
   (apostas) · fase 5 (BetânIAG, H2H, computador) no PR seguinte.
 
-**Próximo**: fase 3b (API de odds, depende das casas), validar as faixas do
-selo com o registro de apostas (5i) e mostrar ao colega (2.1).
+**Fase 8 (2026-11-15)**: Ranking e Jogos no site novo, login por usuário com
+painel de administração, cron, backup, alerta de carga e CI
+(`docs/decisoes/0010-acesso-operacao-e-diferenciais.md`).
+
+**Próximo**: fase 9 (diferenciais, abaixo), fase 3b (API de odds, depende das
+casas), validar as faixas do selo com o registro de apostas (5i) e mostrar ao
+colega (2.1).
 
 ---
 
@@ -87,19 +92,20 @@ selo com o registro de apostas (5i) e mostrar ao colega (2.1).
   filtro de anos de liga não funciona com nba_api.
   *Feito em 2026-11-14:* `PlayerIndex`, uma chamada por carga. Posição só em
   G/F/C (ver `docs/decisoes/0003-matchup-dvp.md`).
-- [ ] **3.2 Time do jogador por jogo**
+- [x] **3.2 Time do jogador por jogo** (Ranking mostra "GSW/CHI"; 2026-11-15)
   Hoje `players.team_id` é o time mais recente; quem foi trocado aparece no
   time novo em toda a temporada no ranking. Usar `player_game_stats.team_id`
   nas médias ou mostrar "GSW/CHI".
-- [ ] **3.3 Conferência e divisão com nba_api** (vêm vazias). Tabela fixa
-  dos 30 times resolve.
-- [ ] **3.4 Atualização diária automática**
+- [x] **3.3 Conferência e divisão com nba_api**: tabela fixa dos 30 times
+  (entra na próxima carga).
+- [x] **3.4 Atualização diária automática** (`deploy/cron.sh instalar`)
   Cron no WSL (exemplo no README). Verificar que o WSL está ligado no
   horário; se não, Agendador de Tarefas do Windows chamando `wsl -e`.
-- [ ] **3.5 Alerta de falha da carga**
+- [x] **3.5 Alerta de falha da carga** (faixa no topo, `nbastats saude`)
   Se o último `sync_log` for erro ou tiver mais de 36 h, avisar
   (e-mail, Telegram ou só um aviso no topo do site).
-- [ ] **3.6 Backup do `data/nba.db`** (cópia diária; o arquivo é pequeno).
+- [x] **3.6 Backup do `data/nba.db`** (`nbastats backup`, diário no cron,
+  14 cópias em `data/backup`; botão na Administração).
 
 ## 3b. Matchups (L5/L10 × DvP) — [P0]
 
@@ -117,7 +123,7 @@ ritmo, saldo, desfalques, nota por critério, agenda, telas Matchups e DvP,
   Probable ficam marcados; desfalques do relatório.
 - [x] 1c. 5 posições estimadas (o DvP segue G/F/C; ver 0004).
 - [x] 1d. `nbastats atualizar` com intervalo mínimo e botão "Atualizar agora".
-- [ ] 1e. Instalar o cron a cada 15 min no WSL (exemplo no README).
+- [x] 1e. Cron a cada 15 min no WSL (`deploy/cron.sh`; instalado em 2026-11-15).
 
 **Fase 2 — análise** (método e números em `docs/decisoes/0005-projecao.md`)
 - [x] 2a. Projeção com número; fora da amostra erra 2% a 4% menos que o L10
@@ -182,7 +188,7 @@ ritmo, saldo, desfalques, nota por critério, agenda, telas Matchups e DvP,
 - [x] 6e. Computador: tabela de calor (temporada, H2H, L5, L10, L20,
   anterior, projeção, DvP), layout escolhido pelo navegador ou na barra
   lateral, página do jogador em duas colunas (conferido em 1280 e 390 px).
-- [ ] 6c. **Trocar o front** (Streamlit limita interação: cada clique
+- [x] 6c. **Trocar o front** (feito na fase 7) (Streamlit limita interação: cada clique
   recarrega a página, sem hover, tabelas e gráficos pouco customizáveis).
   Proposta: API FastAPI sobre `metrics/` + front React, página a página
   (Início e Jogador primeiro). Aguardando decisão.
@@ -211,19 +217,55 @@ ritmo, saldo, desfalques, nota por critério, agenda, telas Matchups e DvP,
   posição, tendências) e **Notícias** (mudanças no injury report, quem pode
   voltar com "com X minutos"); botão "Atualizar dados" no topo; no celular,
   barra inferior com Início, Props, Ao Vivo, Apostas e Mais.
-- [ ] 7i. Levar ao site novo o que ainda só existe no Streamlit: Ranking e
-  Jogo (box score); depois aposentar o Streamlit.
+- [x] 7i. **Ranking** (temporada, últimos N, diferença, por 36 min, playoffs,
+  arremesso, CSV) e **Jogos** (box score completo) no site novo.
+- [ ] 7j. Aposentar o Streamlit (tirar do Docker e do README) depois de uma
+  semana usando só o site novo.
+
+**Fase 8 — acesso e operação** (0010)
+- [x] 8a. Usuários com login e senha, senha provisória e troca obrigatória,
+  sessões, papéis admin/usuário, acesso até uma data, registro de acessos e
+  bloqueio por tentativas. Painel **Administração** (Usuários, Acessos,
+  Sistema). `nbastats usuario criar|listar|senha|ativar|desativar`.
+- [x] 8b. Cron, backup diário e alerta de carga (3.4, 3.5, 3.6).
+- [x] 8c. CI no GitHub Actions: pytest e build do front em cada PR (6.5).
+- [ ] 8d. Favoritos e apostas **por usuário** (hoje são de todos). Precisa de
+  `user_id` nas tabelas e migração (7.1).
+- [ ] 8e. Criar o primeiro admin no site da VPS quando subir de novo
+  (Administração → criar; a senha única deixa de valer).
+
+**Fase 9 — diferenciais** (pesquisa em 0010; ordem sugerida)
+- [ ] 9a. **Calibração pública**: curva "o site disse X%, bateu Y%" com os
+  jogos disputados (backtest) e com as apostas registradas.
+- [ ] 9b. **Efeito cascata da lesão**: quando o injury report muda, recalcular
+  e mostrar quem ganha minutos/uso e a nova projeção contra a linha.
+- [ ] 9c. **Alertas** (Telegram primeiro) para favoritos: mudança de status,
+  linha com valor, jogador a caminho de bater no Ao Vivo.
+- [ ] 9d. **Resumo do dia** às 17h (Telegram/e-mail): jogos, desfalques e as
+  melhores oportunidades.
+- [ ] 9e. **Médias sem garbage time** (jogos decididos por 20+ no 4º quarto)
+  como opção nas janelas e na projeção de minutos.
+- [ ] 9f. **Diário de apostas**: motivo/etiqueta por aposta, notas, e quais
+  motivos dão lucro; CLV quando houver odds (4d).
+- [ ] 9g. **Jogo responsável**: limite de unidades por dia/semana e aviso de
+  sequência de perdas (configurável por usuário).
+- [ ] 9h. **Filtros salvos** na página Props (ex.: "PRA, chance ≥ 60%, só
+  favoritos").
+- [ ] 9i. **PWA**: instalar no celular, ícone, funcionar com conexão ruim.
+- [ ] 9j. **Comparar linhas entre casas** (depende de 3b).
 
 ## 4. Métricas e análises — [P1] [?]
 
 Dependem do item 2.3. Candidatas:
 
-- [ ] **4.1 Médias por 36 minutos** (compara reservas com titulares).
-- [ ] **4.2 Porcentagens de arremesso** (FG%, 3P%, FT%, TS%) nas tabelas.
+- [x] **4.1 Médias por 36 minutos** (Ranking).
+- [x] **4.2 Porcentagens de arremesso** (FG%, 3P%, FT%, TS%) no Ranking e no
+  box score.
 - [x] **4.3 Comparar dois jogadores** lado a lado (página Comparar).
 - [x] **4.4 Desempenho contra um adversário** (H2H na página do jogador).
 - [x] **4.5 Casa e fora** (recortes na página do jogador).
-- [ ] **4.6 Filtro de playoffs**: hoje as médias só usam temporada regular.
+- [ ] **4.6 Filtro de playoffs**: já no Ranking; falta nas janelas do jogador
+  e na projeção.
 - [ ] **4.7 Métricas avançadas** (usage, PER, on/off). Exigem outros
   endpoints; só se o colega pedir.
 
@@ -231,8 +273,8 @@ Dependem do item 2.3. Candidatas:
 
 - [x] **5.1 Busca de jogo por time e data**: chips dos jogos do dia na
   página Props (o box score ainda usa siglas).
-- [ ] **5.2 Nomes de colunas legíveis** (hoje aparecem `pts_n`, `minutes`).
-- [ ] **5.3 Exportar tabela em CSV**.
+- [x] **5.2 Nomes de colunas legíveis** (site novo).
+- [ ] **5.3 Exportar tabela em CSV**: feito no Ranking; falta Props e Apostas.
 - [x] **5.4 Mostrar a data da última atualização** (do `sync_log`).
 - [ ] **5.5 Editar os critérios de potencial pelo site** (hoje é o YAML).
   Só depois que os critérios estabilizarem.
@@ -241,15 +283,16 @@ Dependem do item 2.3. Candidatas:
 
 Pré-requisito: item 2.4 decidido (no servidor, só BALLDONTLIE funciona).
 
-- [ ] **6.1 Dockerfile** com o site e o job diário.
+- [x] **6.1 Dockerfile** (fase 7); o job diário na VPS ainda não (lá o
+  stats.nba.com bloqueia o IP).
 - [ ] **6.2 Onde hospedar**: uma VM pequena (o SQLite fica no disco) ou
   container com volume. Decidir e registrar em `docs/decisoes/`.
-- [ ] **6.3 Acesso privado de verdade**: a senha única atual serve para
-  teste. Para ir ao ar, colocar atrás de um proxy com autenticação
-  (ex.: Cloudflare Access) ou criar login por usuário.
+- [x] **6.3 Acesso privado de verdade**: login por usuário com painel de
+  administração (8a). Opcional depois: Cloudflare Access na frente.
 - [ ] **6.4 HTTPS e domínio** (pode usar o domínio do site pessoal).
-- [ ] **6.5 CI no GitHub Actions** rodando `pytest` a cada PR.
-- [ ] **6.6 Logs e monitoramento**: saúde do site e da carga diária.
+- [x] **6.5 CI no GitHub Actions** rodando `pytest` e o build do front a cada PR.
+- [ ] **6.6 Logs e monitoramento**: a saúde da carga já aparece (8b); falta
+  monitorar o site no ar (uptime) quando for para a VPS.
 
 ## 7. Qualidade técnica — [P2]
 

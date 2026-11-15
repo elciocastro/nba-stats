@@ -20,7 +20,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from nbastats import db
+from nbastats import auth, db
 from nbastats.config import get_settings
 from nbastats.ingest import last_refresh
 from nbastats.metrics import betaniag as bt
@@ -30,6 +30,8 @@ from nbastats.metrics import comparar as cp
 from nbastats.metrics import noticias as nt
 from nbastats.metrics import destaques as dq
 from nbastats.metrics import favoritos as fv
+from nbastats.metrics import ranking as rk
+from nbastats.metrics import sistema as si
 from nbastats.metrics.comparar import _season_of
 from nbastats.metrics.matchup import dvp_table, load_matchup_rules
 from nbastats.metrics.potencial import load_rules, rank_potenciais
@@ -86,15 +88,51 @@ def get_conn():
         conn.close()
 
 
+PUBLICAS = ("/api/login", "/api/saude", "/api/primeiro-admin")
+# com a senha provisória, só dá para ver quem é, trocar a senha e sair
+TROCA_SENHA = ("/api/meta", "/api/eu", "/api/eu/senha", "/api/sair")
+
+
+def _senha_unica() -> str:
+    return os.getenv("NBASTATS_PASSWORD", settings.password) or ""
+
+
+def _token(request: Request) -> str | None:
+    h = request.headers.get("authorization", "")
+    return h[7:] if h.lower().startswith("bearer ") else None
+
+
+def _ip(request: Request) -> str | None:
+    return request.client.host if request.client else None
+
+
 @app.middleware("http")
-async def password(request: Request, call_next):
-    """Senha única (NBASTATS_PASSWORD) no cabeçalho X-Senha para /api/*."""
-    pw = os.getenv("NBASTATS_PASSWORD", settings.password)
+async def acesso(request: Request, call_next):
+    """Usuários com sessão (painel de administração) ou, sem usuários, a
+    senha única ``NBASTATS_PASSWORD`` no cabeçalho X-Senha."""
     path = request.url.path
-    if pw and path.startswith("/api/") and path not in ("/api/login", "/api/saude"):
-        sent = request.headers.get("x-senha", "")
-        if not hmac.compare_digest(sent, pw):
-            return JSONResponse({"detail": "senha"}, status_code=401)
+    request.state.usuario = None
+    if not path.startswith("/api/") or path in PUBLICAS:
+        return await call_next(request)
+    dep = app.dependency_overrides.get(get_conn, get_conn)()  # respeita o override dos testes
+    conn = next(dep) if hasattr(dep, "__next__") else dep
+    try:
+        modo = auth.modo(conn, _senha_unica())
+        if modo == "usuarios":
+            u = auth.sessao(conn, _token(request))
+            if u is None:
+                return JSONResponse({"detail": "login", "modo": modo}, status_code=401)
+            if u["trocar_senha"] and path not in TROCA_SENHA:
+                return JSONResponse({"detail": "trocar_senha"}, status_code=403)
+            if path.startswith("/api/admin/") and u["papel"] != "admin":
+                return JSONResponse({"detail": "Só para administradores."}, status_code=403)
+            request.state.usuario = u
+        elif modo == "senha":
+            if not hmac.compare_digest(request.headers.get("x-senha", ""), _senha_unica()):
+                return JSONResponse({"detail": "login", "modo": modo}, status_code=401)
+    finally:
+        if hasattr(dep, "__next__"):
+            dep.close()  # roda o finally de get_conn (fecha a conexão)
     return await call_next(request)
 
 
@@ -151,27 +189,90 @@ def _game(g: dict[str, Any]) -> dict[str, Any]:
 
 
 @app.get("/api/saude")
-def health():
-    return {"ok": True}
+def health(conn=Depends(get_conn)):
+    return {"ok": True, "modo": auth.modo(conn, _senha_unica())}
 
 
 class Login(BaseModel):
+    login: str | None = None
     senha: str
 
 
 @app.post("/api/login")
-def login(body: Login):
-    pw = os.getenv("NBASTATS_PASSWORD", settings.password)
-    if pw and not hmac.compare_digest(body.senha, pw):
+def login(body: Login, request: Request, conn=Depends(get_conn)):
+    modo = auth.modo(conn, _senha_unica())
+    if modo == "usuarios":
+        try:
+            return {"ok": True, "modo": modo, **auth.entrar(conn, body.login or "", body.senha, _ip(request),
+                                                            request.headers.get("user-agent"))}
+        except auth.AcessoNegado as exc:
+            raise HTTPException(401, str(exc))
+    if modo == "senha" and not hmac.compare_digest(body.senha, _senha_unica()):
         raise HTTPException(401, "Senha incorreta")
+    return {"ok": True, "modo": modo}
+
+
+class PrimeiroAdmin(BaseModel):
+    login: str
+    nome: str | None = None
+    senha: str
+    senha_atual: str | None = None  # a senha única, se houver
+
+
+@app.post("/api/primeiro-admin")
+def first_admin(body: PrimeiroAdmin, request: Request, conn=Depends(get_conn)):
+    """Cria o 1º administrador. Só funciona enquanto não há usuários; com
+    senha única, exige a senha única (quem já tinha acesso)."""
+    modo = auth.modo(conn, _senha_unica())
+    if modo == "usuarios":
+        raise HTTPException(409, "Já existe administrador.")
+    if modo == "senha" and not hmac.compare_digest(body.senha_atual or "", _senha_unica()):
+        raise HTTPException(401, "Senha do site incorreta")
+    try:
+        auth.criar_usuario(conn, body.login, body.senha, body.nome, papel="admin")
+    except ValueError as exc:
+        raise HTTPException(422, str(exc))
+    return {"ok": True, **auth.entrar(conn, body.login, body.senha, _ip(request), request.headers.get("user-agent"))}
+
+
+@app.post("/api/sair")
+def logout(request: Request, conn=Depends(get_conn)):
+    if (tok := _token(request)):
+        auth.sair(conn, tok)
+    return {"ok": True}
+
+
+@app.get("/api/eu")
+def me(request: Request):
+    return {"usuario": request.state.usuario}
+
+
+class TrocaSenha(BaseModel):
+    atual: str
+    nova: str
+
+
+@app.post("/api/eu/senha")
+def change_password(body: TrocaSenha, request: Request, conn=Depends(get_conn)):
+    u = request.state.usuario
+    if u is None:
+        raise HTTPException(400, "Sem usuário (modo de senha única).")
+    try:
+        auth.trocar_propria_senha(conn, u["id"], body.atual, body.nova)
+    except auth.AcessoNegado as exc:
+        raise HTTPException(401, str(exc))
+    except ValueError as exc:
+        raise HTTPException(422, str(exc))
     return {"ok": True}
 
 
 @app.get("/api/meta")
-def meta(conn=Depends(get_conn)):
+def meta(request: Request, conn=Depends(get_conn)):
     cfg = bt.load_betaniag()
     return {"mercados": MARKETS, "hoje": date.today().isoformat(), "atualizado": last_refresh(conn),
-            "betaniag": bool(cfg.get("habilitado")), "esportes": bt.active_sports(cfg)}
+            "betaniag": bool(cfg.get("habilitado")), "esportes": bt.active_sports(cfg),
+            "modo": auth.modo(conn, _senha_unica()), "usuario": request.state.usuario,
+            "alerta": si.status_carga(conn)["alerta"]}
 
 
 @app.get("/api/props")
@@ -427,6 +528,127 @@ def update(forcar: bool = False, conn=Depends(get_conn)):
         raise HTTPException(502, f"Falhou: {exc}")
     ap.settle_bets(conn, ap.load_bet_config())
     return {**res, "atualizado": last_refresh(conn)}
+
+
+# ---------- ranking e jogo (box score) ----------
+
+@app.get("/api/ranking")
+def ranking_route(data: str | None = None, janela: int = Query(10, ge=1, le=82), min_jogos: int = Query(5, ge=1),
+                  por36: bool = False, playoffs: bool = False, conn=Depends(get_conn)):
+    season = _season_of(conn, _day(data))
+    return {"temporada": season, "janela": janela,
+            "jogadores": rk.ranking(conn, season, janela, min_jogos, por36, playoffs)}
+
+
+@app.get("/api/jogos")
+def games_route(data: str | None = None, conn=Depends(get_conn)):
+    """Jogos de uma data; sem jogos com box score nela, a última data que tem."""
+    day = _day(data)
+    jogos = rk.games_by_date(conn, day)
+    if not any(j["tem_box"] for j in jogos):
+        last = rk.last_game_date(conn, day)
+        if last and last != day:
+            return {"data": last, "pedida": day, "jogos": rk.games_by_date(conn, last)}
+    return {"data": day, "pedida": day, "jogos": jogos}
+
+
+@app.get("/api/jogo/{game_id}")
+def game_route(game_id: int, conn=Depends(get_conn)):
+    box = rk.boxscore_game(conn, game_id)
+    if box is None:
+        raise HTTPException(404, "Jogo não encontrado.")
+    return box
+
+
+# ---------- administração ----------
+
+BACKUP_DIR = os.getenv("NBASTATS_BACKUP_DIR", str(Path(settings.db_path).parent / "backup"))
+
+
+class NovoUsuario(BaseModel):
+    login: str
+    nome: str | None = None
+    papel: str = "usuario"
+    expira_em: str | None = None
+
+
+class MudaUsuario(BaseModel):
+    nome: str | None = None
+    papel: str | None = None
+    ativo: bool | None = None
+    expira_em: str | None = None
+    mudar_validade: bool = False  # expira_em só é aplicado com isto (None = sem validade)
+
+
+def _admin_call(fn, *a, **kw):
+    try:
+        return fn(*a, **kw)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc))
+
+
+@app.get("/api/admin/usuarios")
+def admin_users(conn=Depends(get_conn)):
+    return {"usuarios": auth.listar_usuarios(conn), "papeis": auth.PAPEIS}
+
+
+@app.post("/api/admin/usuarios")
+def admin_create(body: NovoUsuario, conn=Depends(get_conn)):
+    """Cria com senha provisória (mostrada uma vez ao admin; troca no 1º acesso)."""
+    if auth.modo(conn, _senha_unica()) != "usuarios":
+        raise HTTPException(409, "Crie primeiro o administrador.")
+    senha = auth.gerar_senha()
+    uid = _admin_call(auth.criar_usuario, conn, body.login, senha, body.nome, body.papel, body.expira_em, True)
+    return {"id": uid, "senha_provisoria": senha}
+
+
+@app.patch("/api/admin/usuarios/{user_id}")
+def admin_update(user_id: int, body: MudaUsuario, conn=Depends(get_conn)):
+    _admin_call(auth.alterar_usuario, conn, user_id, nome=body.nome, papel=body.papel, ativo=body.ativo,
+                expira_em=body.expira_em if body.mudar_validade else False)
+    return {"ok": True}
+
+
+@app.post("/api/admin/usuarios/{user_id}/senha")
+def admin_reset(user_id: int, conn=Depends(get_conn)):
+    senha = auth.gerar_senha()
+    _admin_call(auth.definir_senha, conn, user_id, senha, True)
+    auth.encerrar_sessoes(conn, user_id)
+    return {"senha_provisoria": senha}
+
+
+@app.post("/api/admin/usuarios/{user_id}/sair")
+def admin_kick(user_id: int, conn=Depends(get_conn)):
+    return {"encerradas": auth.encerrar_sessoes(conn, user_id)}
+
+
+@app.delete("/api/admin/usuarios/{user_id}")
+def admin_delete(user_id: int, request: Request, conn=Depends(get_conn)):
+    if request.state.usuario and request.state.usuario["id"] == user_id:
+        raise HTTPException(422, "Você não pode apagar o próprio usuário.")
+    _admin_call(auth.apagar_usuario, conn, user_id)
+    return {"ok": True}
+
+
+@app.get("/api/admin/acessos")
+def admin_log(limite: int = Query(100, le=500), conn=Depends(get_conn)):
+    return {"acessos": auth.acessos(conn, limite)}
+
+
+@app.get("/api/admin/sistema")
+def admin_system(conn=Depends(get_conn)):
+    db_file = Path(settings.db_path)
+    syncs = [dict(r) for r in conn.execute(
+        "SELECT kind, started_at, finished_at, status, games, stats, substr(error, 1, 200) AS error"
+        " FROM sync_log ORDER BY id DESC LIMIT 15")]
+    return {"carga": si.status_carga(conn), "backup": si.status_backup(BACKUP_DIR), "cargas": syncs,
+            "banco_mb": round(db_file.stat().st_size / 1e6, 1) if db_file.exists() else None}
+
+
+@app.post("/api/admin/backup")
+def admin_backup(conn=Depends(get_conn)):
+    dest = si.backup(conn, BACKUP_DIR)
+    return {"arquivo": dest.name, **si.status_backup(BACKUP_DIR)}
 
 
 # ---------- ao vivo ----------

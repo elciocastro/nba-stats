@@ -175,3 +175,13 @@ def test_zonas_de_arremesso_formato_real(conn):
     assert sync_shot_zones(conn, src, 2026)["stats"] == 5
     assert sync_shot_zones(conn, src, 2026)["stats"] == 5
     assert conn.execute("SELECT COUNT(*) FROM shot_zones").fetchone()[0] == 5  # idempotente
+
+
+def test_times_com_conferencia_e_divisao():
+    from nbastats.sources.nba_api_source import NbaApiSource, TEAM_DIVISION
+    src = NbaApiSource(teams_fn=lambda: [{"id": 1, "abbreviation": "BOS", "full_name": "Boston Celtics"},
+                                         {"id": 2, "abbreviation": "LAL", "full_name": "Los Angeles Lakers"}])
+    t = {r["abbreviation"]: r for r in src.teams()}
+    assert (t["BOS"]["conference"], t["BOS"]["division"]) == ("East", "Atlantic")
+    assert (t["LAL"]["conference"], t["LAL"]["division"]) == ("West", "Pacific")
+    assert len(TEAM_DIVISION) == 30

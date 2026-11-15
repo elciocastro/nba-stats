@@ -156,6 +156,19 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--passo", type=int, default=3, help="usa 1 dia a cada N (mais rápido)")
     p.add_argument("--desde", help="AAAA-MM-DD; o começo da temporada tem pouca amostra")
 
+    p = sub.add_parser("usuario", help="usuários do site: criar, listar, senha, ativar, desativar")
+    p.add_argument("acao", choices=("criar", "listar", "senha", "ativar", "desativar"))
+    p.add_argument("login", nargs="?")
+    p.add_argument("--nome")
+    p.add_argument("--admin", action="store_true", help="cria como administrador")
+    p.add_argument("--expira", help="AAAA-MM-DD: acesso até esta data")
+
+    p = sub.add_parser("backup", help="cópia do banco em data/backup (mantém as 14 mais novas)")
+    p.add_argument("--pasta", help="padrão: NBASTATS_BACKUP_DIR ou data/backup")
+    p.add_argument("--manter", type=int, default=14)
+
+    sub.add_parser("saude", help="avisa (código 1) se a carga falhou ou está velha")
+
     args = parser.parse_args(argv)
     settings = get_settings()
     conn = db.connect(settings.db_path)
@@ -325,6 +338,68 @@ def main(argv: list[str] | None = None) -> int:
         rows = rank_potenciais(conn, args.season, load_rules(args.regras))
         _table(rows, ["jogador", "time", "anos_de_liga", "jogos", "nota",
                       "pts", "pts_n", "reb", "reb_n", "ast", "ast_n"])
+
+    elif args.cmd == "usuario":
+        return _usuario(conn, args)
+
+    elif args.cmd == "backup":
+        import os
+        from pathlib import Path
+
+        from .metrics.sistema import backup
+        pasta = args.pasta or os.getenv("NBASTATS_BACKUP_DIR") or str(Path(settings.db_path).parent / "backup")
+        print(f"Backup: {backup(conn, pasta, args.manter)}")
+
+    elif args.cmd == "saude":
+        from .metrics.sistema import status_carga
+        st = status_carga(conn)
+        if st["alerta"]:
+            print(f"ALERTA: {st['alerta']}", file=sys.stderr)
+            return 1
+        print(f"OK: última carga boa há {st['horas']} h ({st['ultima_ok']}).")
+    return 0
+
+
+def _usuario(conn, args) -> int:
+    """Usuários pela linha de comando. A senha é digitada (não aparece na tela
+    nem fica no histórico do shell)."""
+    from getpass import getpass
+
+    from . import auth
+
+    if args.acao == "listar":
+        _table(auth.listar_usuarios(conn), ["id", "login", "nome", "papel", "ativo", "expira_em", "ultimo_acesso"], 200)
+        return 0
+    if not args.login:
+        print("Informe o login.", file=sys.stderr)
+        return 2
+    row = conn.execute("SELECT id FROM users WHERE login = ?", (args.login.strip().lower(),)).fetchone()
+    try:
+        if args.acao == "criar":
+            senha = getpass("Senha: ")
+            if senha != getpass("Repita a senha: "):
+                print("As senhas não conferem.", file=sys.stderr)
+                return 2
+            auth.criar_usuario(conn, args.login, senha, args.nome, "admin" if args.admin else "usuario", args.expira)
+            print(f"Usuário {args.login} criado{' (admin)' if args.admin else ''}.")
+            return 0
+        if row is None:
+            print(f"Usuário {args.login} não existe.", file=sys.stderr)
+            return 1
+        if args.acao == "senha":
+            senha = getpass("Nova senha: ")
+            if senha != getpass("Repita a senha: "):
+                print("As senhas não conferem.", file=sys.stderr)
+                return 2
+            auth.definir_senha(conn, row["id"], senha)
+            auth.encerrar_sessoes(conn, row["id"])
+            print("Senha trocada; sessões abertas foram encerradas.")
+        else:
+            auth.alterar_usuario(conn, row["id"], ativo=args.acao == "ativar")
+            print(f"Usuário {args.login} {'ativado' if args.acao == 'ativar' else 'desativado'}.")
+    except ValueError as exc:
+        print(exc, file=sys.stderr)
+        return 2
     return 0
 
 

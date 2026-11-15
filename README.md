@@ -182,7 +182,9 @@ ROI e desempenho por mercado/unidades/faixa de chance; registra-se pela página
 do jogador), **Comparar** (jogador × jogador, time × time, tendências) e
 **Notícias** (o que mudou no injury report e quem pode voltar). O botão
 "Atualizar dados" no topo faz a mesma carga do `nbastats atualizar`. Só no
-Streamlit, por enquanto: Ranking e Jogo (box score).
+**Ranking** (temporada, últimos N, diferença, por 36 minutos, playoffs,
+arremesso, exporta CSV) e **Jogos** (box score completo). O Streamlit ainda
+sobe, mas tudo já existe no site novo.
 
 ```bash
 pip install -e ".[api]"
@@ -191,8 +193,29 @@ uvicorn nbastats.api.app:app --port 8100     # API + site em http://localhost:81
 # desenvolvimento do front com recarga: (cd frontend && npm run dev) -> :5173
 ```
 
-API documentada em `/api/docs`. Com `NBASTATS_PASSWORD`, a API pede a senha
-(cabeçalho `X-Senha`; o site pede na entrada).
+API documentada em `/api/docs`.
+
+### Acesso e administração
+
+- Sem usuários e sem `NBASTATS_PASSWORD`: aberto (uso local).
+- Só com `NBASTATS_PASSWORD`: senha única (cabeçalho `X-Senha`).
+- Com usuários: cada pessoa entra com login e senha. Para criar o primeiro
+  admin, abra **⚙ → Administração** (pede a senha única, se houver) ou rode
+  `nbastats usuario criar <login> --admin`. A partir daí a senha única
+  deixa de valer.
+
+Na **Administração**: criar usuário (gera senha provisória, mostrada uma vez;
+a pessoa cria a própria no 1º acesso), ativar/desativar, admin/usuário,
+"acesso até" uma data, nova senha, desconectar aparelhos, registro de
+acessos (5 senhas erradas em 15 min bloqueiam o login por 15 min) e
+**Sistema** (cargas, backups, botão de backup). Pela linha de comando:
+
+```bash
+nbastats usuario listar
+nbastats usuario criar coni [--nome Coni] [--admin] [--expira 2027-06-30]
+nbastats usuario senha coni          # digita a nova; derruba as sessões
+nbastats usuario desativar coni      # ou ativar
+```
 
 ### Subir numa VPS para testar (Docker)
 
@@ -210,7 +233,18 @@ não funciona (o stats.nba.com bloqueia IPs de servidor): os dados são os do
 banco enviado. É HTTP sem cadeado: só para teste; para ficar no ar, usar um
 subdomínio com HTTPS.
 
-### Atualização automática (cron no WSL)
+### Atualização automática, backup e alerta (cron no WSL)
+
+```bash
+deploy/cron.sh instalar    # grava no crontab (remover / mostrar)
+nbastats backup            # cópia do banco em data/backup (14 mais novas)
+nbastats saude             # código 1 + ALERTA se a carga falhou ou tem mais de 36 h
+```
+
+O `cron.sh` agenda `atualizar` a cada 15 min das 10h às 02h, `sync-daily`
+às 06:00, `backup` às 06:30 e `saude` às 12:00 (log em `logs/cron.log`). Só
+roda com o WSL ligado. Se a carga falhar ou ficar velha, o site mostra uma
+faixa no topo. Exemplo manual, se preferir:
 
 ```
 0 11 * * *       cd /caminho/nba-stats && .venv/bin/nbastats sync-daily >> logs/sync.log 2>&1
