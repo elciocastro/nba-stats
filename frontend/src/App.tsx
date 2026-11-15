@@ -101,7 +101,7 @@ function Shell() {
   const [data, setData] = useState(today());
   const [betaniag, setB] = useState(() => { try { return localStorage.getItem("betaniag") === "1"; } catch { return false; } });
   const setBetaniag = (b: boolean) => { try { localStorage.setItem("betaniag", b ? "1" : "0"); } catch { /* sem storage */ } setB(b); };
-  const meta = useQuery({ queryKey: ["meta"], queryFn: api.meta });
+  const meta = useQuery({ queryKey: ["meta"], queryFn: api.meta, refetchInterval: 5 * 60_000 });
   const saude = useQuery({ queryKey: ["saude"], queryFn: api.saude, staleTime: 600_000 });
   const marca = useMarca(meta.data?.site ?? saude.data?.site);
   const [, force] = useState(0);
@@ -125,7 +125,7 @@ function Shell() {
           <NavLink to="/jogos">Jogos</NavLink>
         </nav>
         <span className="sp" />
-        <Atualizar />
+        <Atualizar ultima={m?.atualizado ?? null} />
         <label className="toggle"><input type="checkbox" checked={betaniag} onChange={(e) => setBetaniag(e.target.checked)} />BetânIAG</label>
         <input className="input" type="date" value={data} onChange={(e) => e.target.value && setData(e.target.value)} />
         <BotaoTema {...marca} />
@@ -183,14 +183,32 @@ function Conta({ meta }: { meta: Meta }) {
   );
 }
 
-function Atualizar() {
+/** "15:30" (hoje), "ontem 22:10" ou "13/11 09:00", no horário do aparelho. */
+export function quandoAtualizou(iso: string | null): string {
+  if (!iso) return "nunca";
+  const d = new Date(iso), hoje = new Date();
+  const hm = d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  const ontem = new Date(hoje); ontem.setDate(hoje.getDate() - 1);
+  if (d.toDateString() === hoje.toDateString()) return hm;
+  if (d.toDateString() === ontem.toDateString()) return `ontem ${hm}`;
+  return `${d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })} ${hm}`;
+}
+
+function Atualizar({ ultima }: { ultima: string | null }) {
   const m = useMutation({
     mutationFn: () => api2.atualizar(true),
     onSuccess: () => { qc.invalidateQueries(); setTimeout(() => m.reset(), 4000); },
   });
   const label = m.isPending ? "Atualizando…" : m.isSuccess ? "Atualizado ✓" : m.isError ? "Falhou" : "Atualizar dados";
-  return <button className="btn upd" disabled={m.isPending} title={m.isError ? String((m.error as Error).message) : "Box scores, injury report e escalações"}
-    onClick={() => m.mutate()}>{m.isPending ? "⟳" : "↻"} <span className="lbl">{label}</span></button>;
+  const velho = ultima != null && Date.now() - new Date(ultima).getTime() > 3 * 3600_000;
+  return (
+    <span className="upd-wrap">
+      <span className={`ult ${velho ? "aviso" : ""}`} title="Última atualização dos dados (box scores, injury report, agenda e notícias)">
+        dados de {quandoAtualizou(ultima)}</span>
+      <button className="btn upd" disabled={m.isPending}
+        title={m.isError ? String((m.error as Error).message) : `Atualizar agora (última: ${quandoAtualizou(ultima)})`}
+        onClick={() => m.mutate()}>{m.isPending ? "⟳" : "↻"} <span className="lbl">{label}</span></button>
+    </span>);
 }
 
 function MaisLink() {
