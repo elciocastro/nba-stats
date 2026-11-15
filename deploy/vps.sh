@@ -16,7 +16,8 @@
 # Variáveis: VPS (padrão root@45.159.173.222), SSH_KEY (~/.ssh/netsentinel-vps),
 # PORTA (8100), PORTA_ANTIGO (vazio = não sobe o Streamlit; 8501 para subir),
 # DOMINIO (com HTTPS atrás de um Caddy: o contêiner entra na rede REDE, padrão
-# netsentinel_default, com o nome nba-stats, e a porta fica só em 127.0.0.1).
+# netsentinel_default, com o nome nba-stats, e a porta fica só em 127.0.0.1;
+# fica gravado na VPS, então só precisa ser passado uma vez).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -30,6 +31,13 @@ REDE="${REDE:-netsentinel_default}"
 DIR=/opt/nba-stats
 PY="${PY:-.venv/bin/python}"
 r() { ssh -i "$KEY" -o BatchMode=yes "$VPS" "$@"; }
+# O domínio fica gravado na VPS: quem rodar o script sem DOMINIO não tira o
+# site do Caddy por engano. DOMINIO=- volta para HTTP na porta (teste).
+if [ "$ACAO" != desativar ] && [ "$ACAO" != senha ]; then
+  if [ -z "$DOMINIO" ]; then DOMINIO=$(r "cat $DIR/dominio 2>/dev/null" || true)
+  elif [ "$DOMINIO" = - ]; then DOMINIO=""; r "rm -f $DIR/dominio"
+  else r "mkdir -p $DIR && echo '$DOMINIO' > $DIR/dominio"; fi
+fi
 
 # Cópia consistente mesmo com o cron gravando (API de backup do SQLite).
 copia_local() {

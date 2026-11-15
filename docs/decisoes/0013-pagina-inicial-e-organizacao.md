@@ -72,3 +72,11 @@ no menu.
 - HTTPS pelo Caddy que já roda na VPS (do NetSentinel), num subdomínio
   próprio: o contêiner entra na rede do Caddy com o nome `nba-stats`.
   `suporte.elciocastro.com` é o endereço do NetSentinel e fica como está.
+- No ar em 2026-11-15 em https://nba.elciocastro.com. O Caddyfile do
+  NetSentinel ganhou `import /config/sites/*.caddy` (pasta no volume
+  `caddy-config`, que o Caddy já monta): cada projeto põe o seu bloco lá e
+  o Caddy recarrega sem reiniciar. O contêiner do Caddy estava preso ao
+  Caddyfile de quando foi criado (o deploy do NetSentinel troca o arquivo no
+  host), por isso a recarga usou uma cópia em `/config/Caddyfile.ativo`; no
+  próximo reinício ele lê o do host, que tem a mesma linha. A linha precisa
+  estar no repositório do NetSentinel, senão o próximo deploy dele a apaga.
