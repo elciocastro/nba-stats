@@ -2,7 +2,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api3, BoxTime } from "../api";
-import { usePrefs } from "../App";
+import { usePrefs, Esqueleto } from "../App";
 import { ddmm } from "../components";
 
 export default function Jogos() {
@@ -14,7 +14,7 @@ export default function Jogos() {
   return (
     <>
       <h1>Jogos</h1>
-      {q.isLoading && <div className="loading">Carregando…</div>}
+      {q.isLoading && <Esqueleto />}
       {q.data && (
         <>
           {q.data.data !== q.data.pedida && <p className="muted small" style={{ marginTop: 0 }}>
@@ -34,7 +34,7 @@ export default function Jogos() {
 
 function Box({ id }: { id: number }) {
   const q = useQuery({ queryKey: ["jogo", id], queryFn: () => api3.jogo(id) });
-  if (q.isLoading) return <div className="loading">Carregando…</div>;
+  if (q.isLoading) return <Esqueleto />;
   if (q.error) return <div className="err">{String((q.error as Error).message)}</div>;
   const g = q.data!;
   const [fora, casa] = g.times;

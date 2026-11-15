@@ -3,7 +3,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { api2, cascata } from "../api";
-import { usePrefs } from "../App";
+import { usePrefs, Esqueleto } from "../App";
 import { Photo } from "../components";
 
 const ICON: Record<string, string> = { entrou: "🆕", saiu: "✅", melhorou: "⬆️", piorou: "⬇️", lista: "•" };
@@ -16,7 +16,7 @@ export default function Lesoes() {
   const nav = useNavigate();
   const [mins, setMins] = useState(28);
   const q = useQuery({ queryKey: ["lesoes", data], queryFn: () => api2.lesoes(data), refetchInterval: 5 * 60_000 });
-  if (q.isLoading) return <div className="loading">Carregando…</div>;
+  if (q.isLoading) return <Esqueleto />;
   if (q.error) return <div className="err">{String((q.error as Error).message)}</div>;
   const n = q.data!;
   return (
@@ -78,7 +78,7 @@ function Cascata() {
         (pelo menos 2 jogos sem) e a projeção do dia contra a linha. 🆕 = mudou no último injury report (a linha da casa pode não ter ajustado).</p>
       <div className="tabs" style={{ marginBottom: 10 }}>{Object.entries(CMK).map(([k, v]) =>
         <button key={k} className={`tab ${k === mk ? "on" : ""}`} onClick={() => setMk(k)}>{v}</button>)}</div>
-      {q.isLoading && <div className="loading">Calculando…</div>}
+      {q.isLoading && <Esqueleto />}
       {q.data && !q.data.desfalques.length && <p className="muted">Nenhum desfalque com amostra suficiente hoje.</p>}
       <div className="grid2">{q.data?.desfalques.map((d) => (
         <div key={`${d.time}${d.fora}`} className="panel">

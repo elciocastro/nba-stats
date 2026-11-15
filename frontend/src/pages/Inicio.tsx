@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { NavLink, useNavigate } from "react-router-dom";
 import { api, api2, Atuacao, Classif, Liga, Manchete, Oportunidade, Resultado, teamLogo } from "../api";
 import { quandoAtualizou, usePrefs } from "../App";
-import { Bars, num, Photo, SealBadge, useFavs } from "../components";
+import { Bars, num, Num, Photo, SealBadge, useFavs } from "../components";
 import { BolaQuicando } from "../marca";
 
 const MK: Record<string, string> = { pts: "Pontos", reb: "Rebotes", ast: "Assist.", pra: "PRA", fg3m: "3FM" };
@@ -204,11 +204,11 @@ function Hoje() {
     <>
       <h2>Hoje · {d.jogos.length} jogos</h2>
       <div className="kpis">
-        <div className="kpi"><div className="l">Jogos</div><div className="v">{d.jogos.length}</div></div>
-        <div className="kpi"><div className="l">Props boas</div><div className="v">{betaniag ? d.jogos.reduce((a, j) => a + j.props_boas, 0) : "—"}</div>
+        <div className="kpi"><div className="l">Jogos</div><div className="v"><Num v={d.jogos.length} /></div></div>
+        <div className="kpi"><div className="l">Props boas</div><div className="v">{betaniag ? <Num v={d.jogos.reduce((a, j) => a + j.props_boas, 0)} /> : "—"}</div>
           <div className="s">{betaniag ? "selo Forte/Boa" : "ligue o BetânIAG"}</div></div>
-        <div className="kpi"><div className="l">Com odd da casa</div><div className="v">{d.oportunidades.com_odd.length}</div></div>
-        <div className="kpi"><div className="l">Em alta</div><div className="v">{d.em_alta.length}</div></div>
+        <div className="kpi"><div className="l">Com odd da casa</div><div className="v"><Num v={d.oportunidades.com_odd.length} /></div></div>
+        <div className="kpi"><div className="l">Em alta</div><div className="v"><Num v={d.em_alta.length} /></div></div>
       </div>
 
       {favPlayers.length > 0 && (

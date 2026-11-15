@@ -5,7 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { ColumnDef, createColumnHelper } from "@tanstack/react-table";
 import { api3, RankRow } from "../api";
-import { usePrefs } from "../App";
+import { usePrefs, Esqueleto } from "../App";
 import { baixarCsv, DataTable, Photo, useMobile } from "../components";
 
 const STATS: [string, string][] = [["min", "Min"], ["pts", "PTS"], ["reb", "REB"], ["ast", "AST"], ["pra", "PRA"],
@@ -92,7 +92,7 @@ export default function Ranking() {
         <label className="toggle" title="Tira os jogos decididos por muitos pontos, em que os titulares saem cedo">
           <input type="checkbox" checked={semLavadas} onChange={(e) => setSemLavadas(e.target.checked)} />Sem lavadas</label>
       </div>
-      {q.isLoading && <div className="loading">Calculando…</div>}
+      {q.isLoading && <Esqueleto />}
       {q.error && <div className="err">{String((q.error as Error).message)}</div>}
       {q.data && (
         <div className="fixa1">

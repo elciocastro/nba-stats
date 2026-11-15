@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Bar, BarChart, CartesianGrid, Cell, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { CalResumo, calibracao } from "../api";
 import { MARKETS } from "./Props";
+import { Esqueleto } from "../App";
 
 const POUCOS = 30; // faixa com menos palpites que isto: ruído, não conclusão
 const PRINCIPAIS = ["pts", "reb", "ast", "pra", "fg3m", "pr", "pa", "ra", "stl", "blk", "turnover"];
@@ -11,7 +12,7 @@ const PRINCIPAIS = ["pts", "reb", "ast", "pra", "fg3m", "pr", "pa", "ra", "stl",
 export default function Calibracao() {
   const q = useQuery({ queryKey: ["calibracao"], queryFn: calibracao });
   const [mk, setMk] = useState("pts");
-  if (q.isLoading) return <div className="loading">Carregando…</div>;
+  if (q.isLoading) return <Esqueleto />;
   if (q.error) return <div className="err">{String((q.error as Error).message)}</div>;
   const c = q.data!;
   const bt = c.backtest[0];

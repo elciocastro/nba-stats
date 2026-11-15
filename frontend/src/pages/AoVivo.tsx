@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { aoVivo, LiveGame, LivePlayer } from "../api";
 import { Photo, Star, useFavs } from "../components";
+import { Esqueleto } from "../App";
 
 const MK: Record<string, string> = { pts: "Pontos", reb: "Rebotes", ast: "Assist.", fg3m: "3 pts", pra: "PRA" };
 const ST: Record<string, { cls: string; txt: string }> = {
@@ -37,7 +38,7 @@ export default function AoVivo() {
           <label className="toggle"><input type="checkbox" checked={soFav} onChange={(e) => setSoFav(e.target.checked)} />Só favoritos ★</label>
         </div>
       </div>
-      {q.isLoading && <div className="loading">Buscando o placar…</div>}
+      {q.isLoading && <Esqueleto />}
       {q.error && <div className="err">{String((q.error as Error).message)}</div>}
       {q.data && !q.data.jogos.length && <div className="muted">Nenhum jogo hoje.</div>}
 

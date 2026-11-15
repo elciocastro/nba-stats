@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import { api, api3, CampoCfg, config, Meta, UsuarioAdm } from "../api";
+import { Esqueleto } from "../App";
 
 const quando = (iso: string | null) => (iso ? new Date(iso).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : "—");
 
@@ -157,7 +158,7 @@ function Sistema() {
   const qc = useQueryClient();
   const q = useQuery({ queryKey: ["admin-sistema"], queryFn: api3.sistema });
   const bk = useMutation({ mutationFn: api3.backup, onSuccess: () => qc.invalidateQueries({ queryKey: ["admin-sistema"] }) });
-  if (!q.data) return <div className="loading">Carregando…</div>;
+  if (!q.data) return <Esqueleto />;
   const { carga, backup, cargas, banco_mb, alertas } = q.data;
   return (
     <>
@@ -193,7 +194,7 @@ const mostrar = (v: unknown) => v == null || v === "" ? "vazio" : Array.isArray(
 function Configuracoes() {
   const q = useQuery({ queryKey: ["admin-config"], queryFn: config.ler });
   const [sec, setSec] = useState("site");
-  if (!q.data) return <div className="loading">Carregando…</div>;
+  if (!q.data) return <Esqueleto />;
   const s = q.data.secoes.find((x) => x.arquivo === sec) ?? q.data.secoes[0];
   return (
     <>
