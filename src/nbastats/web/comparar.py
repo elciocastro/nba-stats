@@ -8,9 +8,8 @@ from typing import Any
 import altair as alt
 import streamlit as st
 
-from nbastats.metrics import load_matchup_rules, load_projection_params
 from nbastats.metrics import comparar as cp
-from nbastats.metrics import historico as hs
+from nbastats.metrics import load_matchup_rules, load_projection_params
 from nbastats.metrics import noticias as nt
 from nbastats.web import props
 

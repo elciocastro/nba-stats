@@ -4,7 +4,13 @@ import pytest
 
 from nbastats.ingest import sync_season
 from nbastats.metrics.apostas import (
-    add_bet, delete_bet, list_bets, outcome, performance, profit, settle_bets,
+    add_bet,
+    delete_bet,
+    list_bets,
+    outcome,
+    performance,
+    profit,
+    settle_bets,
 )
 
 

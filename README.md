@@ -132,8 +132,15 @@ nbastats backtest 2025 --desde 2025-12-01    # critérios da anotação (ver 000
 ### Acessar pelo celular (mesma rede Wi-Fi)
 
 O site roda dentro do WSL, que fica numa rede interna do Windows; por isso
-o celular não alcança o endereço que o Streamlit mostra. Antes de abrir para
-a rede, defina uma senha em `NBASTATS_PASSWORD` no `.env`.
+o celular não alcança `localhost`. **Antes de abrir para a rede, crie os
+usuários** (Administração ou `nbastats usuario criar`): com usuários, todo
+acesso pede login.
+
+Suba a API ouvindo em todas as interfaces:
+
+```bash
+uvicorn nbastats.api.app:app --host 0.0.0.0 --port 8100
+```
 
 Opção 1, Windows 11 (mais simples): rede espelhada do WSL. Crie
 `%UserProfile%\.wslconfig` com:
@@ -143,28 +150,32 @@ Opção 1, Windows 11 (mais simples): rede espelhada do WSL. Crie
 networkingMode=mirrored
 ```
 
-No PowerShell (como administrador): `wsl --shutdown`, depois libere a porta
-no firewall:
+No PowerShell (como administrador): `wsl --shutdown` e libere a porta no
+firewall do Windows e no do WSL (Hyper-V):
 
 ```
-New-NetFirewallRule -DisplayName "nba-stats 8501" -Direction Inbound -LocalPort 8501 -Protocol TCP -Action Allow
+New-NetFirewallRule -DisplayName "nba-stats 8100" -Direction Inbound -LocalPort 8100 -Protocol TCP -Action Allow
+New-NetFirewallHyperVRule -Name nbastats -DisplayName "nba-stats 8100" -Direction Inbound -VMCreatorId '{40E0AC32-46A5-438A-A0B2-2B479E8F2E90}' -Protocol TCP -LocalPorts 8100
 ```
 
-Suba o site de novo e abra no celular `http://<IP do Windows>:8501`
-(o IP aparece em `ipconfig`, no adaptador Wi-Fi).
+Abra no celular `http://<IP do Windows>:8100` (o IP aparece em `ipconfig`,
+no adaptador Wi-Fi) e use "Adicionar à tela inicial" para virar app.
 
 Opção 2 (Windows 10 ou sem rede espelhada): redirecionar a porta. No WSL,
 pegue o IP com `hostname -I`; no PowerShell como administrador:
 
 ```
-netsh interface portproxy add v4tov4 listenport=8501 listenaddress=0.0.0.0 connectport=8501 connectaddress=<IP do WSL>
-New-NetFirewallRule -DisplayName "nba-stats 8501" -Direction Inbound -LocalPort 8501 -Protocol TCP -Action Allow
+netsh interface portproxy add v4tov4 listenport=8100 listenaddress=0.0.0.0 connectport=8100 connectaddress=<IP do WSL>
+New-NetFirewallRule -DisplayName "nba-stats 8100" -Direction Inbound -LocalPort 8100 -Protocol TCP -Action Allow
 ```
 
-O IP do WSL muda quando o Windows reinicia; aí refaça o `portproxy`.
+O IP do WSL muda quando o Windows reinicia; aí refaça o `portproxy`
+(`netsh interface portproxy show all` lista o que está ativo). Para o
+Streamlit antigo, troque 8100 por 8501.
 
 Fora de casa: use uma VPN privada entre os seus aparelhos (ex.: Tailscale),
-em vez de abrir a porta para a internet.
+em vez de abrir a porta para a internet. O login é por HTTP simples; na
+rede de casa serve, na internet precisa de HTTPS (6.4 do backlog).
 
 ### Site novo (API + React), em migração
 
@@ -173,7 +184,7 @@ Início (destaques e favoritos), Jogador (gráficos interativos, tabela jogo a
 jogo ordenável e colorida, "e se jogar X minutos", linha da casa) e **Props
 integrado**: abas Props, Linhas, Matchups, DvP e Potenciais com o mesmo dia,
 mercado, jogos, busca e filtro de favoritos. **Favoritos** (★) em jogadores,
-times e jogos, guardados no banco e compartilhados entre quem usa o site.
+times e jogos, guardados no banco e separados por usuário (no primeiro acesso\ncada um recebe uma cópia da lista que existia antes dos logins).
 **Ao Vivo**: placar dos jogos e, por jogador, o parcial em pontos, rebotes,
 assistências, bolas de 3 ou PRA contra a linha (ou a média), a projeção do
 final no ritmo atual e a chance de bater; atualiza a cada 30 s.
@@ -183,7 +194,7 @@ do jogador), **Comparar** (jogador × jogador, time × time, tendências) e
 **Notícias** (o que mudou no injury report e quem pode voltar). O botão
 "Atualizar dados" no topo faz a mesma carga do `nbastats atualizar`. Só no
 **Ranking** (temporada, últimos N, diferença, por 36 minutos, playoffs,
-arremesso, exporta CSV) e **Jogos** (box score completo). O Streamlit ainda
+arremesso) e **Jogos** (box score completo). O Streamlit ainda
 sobe, mas tudo já existe no site novo.
 
 ```bash
@@ -213,7 +224,27 @@ API documentada em `/api/docs`.
   `habilitado: true` em `config/alertas.yaml`. O cron manda alertas dos
   favoritos (lesão, linha com valor) a cada 15 min e o resumo às 17h. Teste
   sem enviar: `nbastats resumo --simular` / `nbastats alertas --simular`.
+  Durante os jogos (até 2h) também avisa quando um favorito está **a caminho
+  de bater** (chance ≥ 70% no ritmo atual, `ao_vivo_chance_min`) e quando
+  **bateu** a linha.
+- **CSV**: Props, Apostas e Ranking exportam a tabela filtrada.
+- **Playoffs**: a página do jogador tem a janela "PO" (jogos de playoffs).
 - **App no celular**: no Chrome/Safari, "Adicionar à tela inicial" (PWA).
+
+### Configurações e identidade
+
+- **Administração → Configurações**: os parâmetros dos YAML (projeção, BetânIAG,
+  jogo responsável, alertas, matchup, potencial e a identidade do site) com
+  descrição, tipo e o valor padrão. O que muda pelo site vai para
+  `data/ajustes/<arquivo>.yaml` (fora do Git) e vale por cima do YAML;
+  "Restaurar" volta ao padrão. `nbastats calibrar` ignora os ajustes e regrava
+  só o YAML.
+- **Garrafão**: nome, subtítulo, cor de destaque e tema padrão em
+  `config/site.yaml` (também editáveis pelo site). Tema **escuro, claro ou do
+  sistema** no botão ◐ do topo; a escolha fica no navegador.
+- **Calibração por encolhimento**: a chance de cada mercado é "puxada" para
+  50% pelo fator `encolhimento` de `config/projecao.yaml`, ajustado fora da
+  amostra (0012). Faixas com menos de 30 palpites aparecem marcadas.
 
 ### Acesso e administração
 
@@ -303,7 +334,7 @@ src/nbastats/
   ia.py                    relatório BetânIAG com IA (opcional)
   cli.py                   comando nbastats
 tests/                     pytest com fontes falsas e respostas reais gravadas
-docs/decisoes/             0001 a 0009: decisões, métodos e resultados
+docs/decisoes/             0001 a 0012: decisões, métodos e resultados
 docs/BACKLOG.md            o que foi feito e o que falta, em fases
 ```
 
@@ -311,6 +342,9 @@ docs/BACKLOG.md            o que foi feito e o que falta, em fases
 
 ```bash
 pytest
+ruff check src tests
+# contrato com as APIs reais da NBA (fora do CI; ~10 s):
+NBASTATS_CONTRATO=1 pytest -m contrato
 ```
 
 ## Limitações conhecidas
@@ -318,13 +352,13 @@ pytest
 - Posição: as fontes só trazem G/F/C; PG/SG/SF/PF/C é estimado.
 - Injury report guardado a partir de 14/11/2026; datas anteriores usam "não
   jogou a última partida".
-- Zonas de arremesso são uma fotografia da temporada (sem histórico dia a
-  dia), por isso ainda não foram validadas no teste retroativo.
+- Zonas de arremesso: a foto diária (`shot_zones_daily`) começou em
+  15/11/2026; o encaixe só poderá ser validado no retroativo com meses dela.
 - Sem linha da casa, a referência é o L10 arredondado, que favorece o under.
 - Linhas são digitadas; a busca automática depende de escolher as casas
   (fase 3b do backlog).
 - Fotos dos jogadores vêm do CDN da NBA (ids da nba_api); com a BALLDONTLIE
   os ids são outros e as fotos não aparecem.
-- Login é uma senha única (`NBASTATS_PASSWORD`).
+- Login por HTTP simples: fora da rede de casa, só atrás de HTTPS ou VPN.
 - O time do jogador é o mais recente informado pela API, não o da época de
   cada jogo (o box score usa o time correto da partida).

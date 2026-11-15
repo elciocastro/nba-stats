@@ -175,10 +175,14 @@ def test_zonas_de_arremesso_formato_real(conn):
     assert sync_shot_zones(conn, src, 2026)["stats"] == 5
     assert sync_shot_zones(conn, src, 2026)["stats"] == 5
     assert conn.execute("SELECT COUNT(*) FROM shot_zones").fetchone()[0] == 5  # idempotente
+    from datetime import date
+    sync_shot_zones(conn, src, 2026, today=date(2026, 11, 20))
+    days = conn.execute("SELECT date, COUNT(*) FROM shot_zones_daily GROUP BY date ORDER BY date").fetchall()
+    assert [tuple(d) for d in days][-1] == ("2026-11-20", 5) and len(days) == 2  # uma foto por dia
 
 
 def test_times_com_conferencia_e_divisao():
-    from nbastats.sources.nba_api_source import NbaApiSource, TEAM_DIVISION
+    from nbastats.sources.nba_api_source import TEAM_DIVISION, NbaApiSource
     src = NbaApiSource(teams_fn=lambda: [{"id": 1, "abbreviation": "BOS", "full_name": "Boston Celtics"},
                                          {"id": 2, "abbreviation": "LAL", "full_name": "Los Angeles Lakers"}])
     t = {r["abbreviation"]: r for r in src.teams()}

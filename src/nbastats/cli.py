@@ -9,12 +9,27 @@ from datetime import date, timedelta
 from . import db
 from .config import get_settings
 from .ingest import (
-    refresh, sync_injuries, sync_range, sync_schedule, sync_season, sync_shot_zones,
+    refresh,
+    sync_injuries,
+    sync_range,
+    sync_schedule,
+    sync_season,
+    sync_shot_zones,
 )
 from .metrics import (
-    MATCHUP_STATS, backtest, boxscore, build_dataset, calibrate, evaluate, load_projection_params,
-    save_projection_params, load_matchup_rules, load_rules, matchup_report, player_trends,
+    MATCHUP_STATS,
+    backtest,
+    boxscore,
+    build_dataset,
+    calibrate,
+    evaluate,
+    load_matchup_rules,
+    load_projection_params,
+    load_rules,
+    matchup_report,
+    player_trends,
     rank_potenciais,
+    save_projection_params,
 )
 from .sources import FONTES, build_injury_source, build_source
 
@@ -443,10 +458,21 @@ def _alertas(conn, args) -> int:
             return 1
         print("Resumo enviado.")
         return 0
-    favs = fv.list_favorites(conn)
+    favs = fv.list_favorites(conn, todos=True)  # o chat é um só: favoritos de todos
     team_ids = {r["abbreviation"]: r["id"] for r in conn.execute("SELECT id, abbreviation FROM teams")}
     alerts = al.injury_alerts(nt.changes(conn, day)["mudancas"], favs, team_ids, cfg, day)
     alerts += al.value_alerts(opps["com_odd"], favs, cfg, day)
+    try:  # jogos em andamento (placar ao vivo do CDN da NBA)
+        from .metrics import aovivo as av
+        from .metrics.projecao import load_projection_params
+        from .sources.nba_live import NbaLiveSource
+        games = NbaLiveSource().live_games()
+        if any(g["status"] == 2 for g in games):
+            params = load_projection_params()
+            live = {s: av.live_report(games, av.pre_from_report(reports[s]), s, params, "linha") for s in reports}
+            alerts += al.live_alerts(live, favs, cfg, day)
+    except Exception as exc:  # placar fora do ar: segue com os outros alertas
+        print(f"Ao vivo indisponível: {exc}", file=sys.stderr)
     novos = al.pending(conn, alerts)
     if args.simular:
         print("\n".join(t for _, t in novos) or "(nenhum alerta novo)")

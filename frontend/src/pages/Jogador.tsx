@@ -75,6 +75,7 @@ function Body({ d, mercado, data }: { d: Detalhe; mercado: string; data: string 
   const games = useMemo(() => {
     let pool = d.log.filter((g) => !split || SPLITS[split](g));
     if (win === "H2H") return pool.filter((g) => g.opp_id === d.adversario_id).slice(0, 20);
+    if (win === "PO") return (d.playoffs ?? []).filter((g) => !split || SPLITS[split](g));
     if (win === anterior) return pool.filter((g) => g.season === d.temporada_atual - 1).slice(0, 41);
     pool = pool.filter((g) => g.season === d.temporada_atual);
     return win === atual ? pool : pool.slice(0, Number(win.slice(1)));
@@ -117,7 +118,7 @@ function Body({ d, mercado, data }: { d: Detalhe; mercado: string; data: string 
             ))}
           </div>
           <div className="row">
-            <div className="seg">{["L5", "L10", "L20", atual, "H2H", anterior].map((w) => (
+            <div className="seg">{["L5", "L10", "L20", atual, "H2H", anterior, ...(d.playoffs?.length ? ["PO"] : [])].map((w) => (
               <button key={w} className={w === win ? "on" : ""} onClick={() => setWin(w)}>{w}</button>))}</div>
             <div className="tabs">{Object.keys(SPLITS).map((s) => (
               <button key={s} className={`tab ${s === split ? "on" : ""}`} onClick={() => setSplit(s === split ? null : s)}>{s}</button>))}</div>

@@ -18,16 +18,23 @@ from __future__ import annotations
 import math
 import sqlite3
 from collections import defaultdict
+from collections.abc import Iterable
 from pathlib import Path
 from statistics import mean
-from typing import Any, Iterable
+from typing import Any
 
 import yaml
 
 from .. import ajustes as _aj
-
 from .matchup import (
-    MATCHUP_STATS, _COLS, _derive, _player_rows, _team_games, dvp, player_form, player_groups,
+    _COLS,
+    MATCHUP_STATS,
+    _derive,
+    _player_rows,
+    _team_games,
+    dvp,
+    player_form,
+    player_groups,
     team_context,
 )
 
@@ -246,7 +253,10 @@ def build_dataset(conn: sqlite3.Connection, season: int, rules: dict[str, Any],
                        "casa": team == home,
                        "ausente_time": absent_production(form, absent[team]),
                        "ausente_adv": absent_production(form, absent[opp]),
-                       "proj_base": {}, "ausencia": share}
+                       "proj_base": {}, "ausencia": share, "min_l10": f["minutes_l10"]}
+                margin = expected_margin(rec["saldo_time"], rec["saldo_adv"], rec["casa"],
+                                         rec["ausente_time"], rec["ausente_adv"], params)
+                rec["risco_blowout"] = blowout_probability(margin, params)
                 group = groups.get(pid)
                 for s in MATCHUP_STATS:
                     d = table.get(opp, {}).get(group, {}).get(s) if group else None
@@ -375,7 +385,7 @@ def evaluate(data: list[dict[str, Any]], params: dict[str, Any],
         if not pts:
             continue
         e_proj = mean(abs(p - y) for p, _, y in pts)
-        e_l10 = mean(abs(l - y) for _, l, y in pts)
+        e_l10 = mean(abs(l10 - y) for _, l10, y in pts)
         rows.append({"mercado": s, "n": len(pts), "erro_l10": round(e_l10, 3),
                      "erro_projecao": round(e_proj, 3),
                      "ganho_pct": round(100 * (e_l10 - e_proj) / e_l10, 1) if e_l10 else None})

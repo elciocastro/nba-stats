@@ -46,7 +46,7 @@ export type Detalhe = Jogador & {
   proj_detalhe: { valor: number; base: number; minutos: number; f_dvp: number; f_ritmo: number;
                   f_ajuste: number; ausencia: number; erro_tipico: number | null } | null;
   com_sem: { companheiro: string; com: number | null; jogos_com: number; sem: number | null; jogos_sem: number }[] | null;
-  medias: Record<string, number>; log: JogoLog[]; adversario_id: number;
+  medias: Record<string, number>; log: JogoLog[]; adversario_id: number; playoffs: JogoLog[];
   checklist: { item: string; valor: string; ok: boolean | null; nota: string }[] | null;
 };
 

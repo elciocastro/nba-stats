@@ -115,3 +115,15 @@ export function useMobile(px = 760) {
   }, [px]);
   return m;
 }
+
+/** Baixa uma tabela como CSV (Excel abre direto: BOM UTF-8 e separador vírgula). */
+export function baixarCsv(nome: string, linhas: Record<string, unknown>[], colunas: [string, string][]) {
+  const esc = (v: unknown) => { const t = v == null ? "" : Array.isArray(v) ? v.join(" | ") : String(v);
+    return /[",;\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t; };
+  const body = [colunas.map(([, r]) => esc(r)).join(","), ...linhas.map((l) => colunas.map(([k]) => esc(l[k])).join(","))].join("\n");
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob(["\ufeff" + body], { type: "text/csv;charset=utf-8" }));
+  a.download = nome.endsWith(".csv") ? nome : `${nome}.csv`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}

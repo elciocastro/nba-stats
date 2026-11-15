@@ -223,7 +223,7 @@ def dvp(rows: list[dict[str, Any]], teams: dict, group_of: dict[int, str | None]
     o adversário não usou ninguém daquele grupo conta como zero.
     """
     allowed: dict[tuple[int, int], dict[str, dict[str, float]]] = {}
-    for (game_id, team_id), t in teams.items():
+    for (game_id, _team_id), t in teams.items():
         if since and t["date"] < since:
             continue
         # a defesa é o adversário de quem atacou

@@ -9,5 +9,9 @@ so_favoritos: true      # false = alerta de qualquer jogador
 ev_minimo: 0.05         # linha da casa com valor esperado a partir de +5%
 status_alerta: [Out, Doubtful, Questionable]
 
+# Ao vivo: favorito a caminho de bater a linha (chance >= mínimo) e quem bateu
+ao_vivo: true
+ao_vivo_chance_min: 0.7
+
 # Resumo do dia (17h no cron)
 resumo_top: 5

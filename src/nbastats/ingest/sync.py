@@ -8,8 +8,9 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from collections.abc import Iterable
 from datetime import date, datetime, timedelta, timezone
-from typing import Any, Iterable
+from typing import Any
 
 from ..sources.base import DataSource, InjurySource
 from ..sources.injury_report import normalize_name
@@ -293,8 +294,9 @@ def refresh(conn, source: DataSource, injury_source: InjurySource | None,
     return {"pulado": False, "ultima": last_refresh(conn), **result}
 
 
-def sync_shot_zones(conn, source: DataSource, season: int) -> dict[str, int]:
-    """Fotografia das zonas de arremesso da temporada (substitui a anterior)."""
+def sync_shot_zones(conn, source: DataSource, season: int, today: date | None = None) -> dict[str, int]:
+    """Fotografia das zonas de arremesso da temporada (substitui a anterior) e
+    uma cópia por dia em ``shot_zones_daily``."""
     def work() -> dict[str, int]:
         stamp = _now()
         rows = [{"id": f"{season}:{z['kind']}:{z['entity_id']}:{z['zone']}", "season": season,
@@ -302,6 +304,11 @@ def sync_shot_zones(conn, source: DataSource, season: int) -> dict[str, int]:
                  "fgm": z["fgm"], "fga": z["fga"], "updated_at": stamp}
                 for z in source.shot_zones(season=season)]
         n = _upsert(conn, "shot_zones", rows)
+        # foto do dia (a tabela acima só guarda a mais recente)
+        day = (today or date.today()).isoformat()
+        _upsert(conn, "shot_zones_daily", [{"id": f"{day}:{r['id']}", "date": day, "season": season, "kind": r["kind"],
+                                            "entity_id": r["entity_id"], "zone": r["zone"], "fgm": r["fgm"],
+                                            "fga": r["fga"]} for r in rows])
         return {"games": 0, "stats": n}
 
     return _logged(conn, "zones", {"season": season}, work)

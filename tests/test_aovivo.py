@@ -75,8 +75,9 @@ def test_relatorio_ao_vivo_por_mercado_e_alvo():
 
 def test_api_ao_vivo(monkeypatch):
     from fastapi.testclient import TestClient
-    from nbastats.api import app as api
+
     from nbastats import db
+    from nbastats.api import app as api
     conn = db.connect(":memory:", threads=True)
     db.init_db(conn)
     api._LIVE.update(t=0.0, dados=None)

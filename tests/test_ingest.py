@@ -1,10 +1,9 @@
 import pytest
-
 from conftest import GAMES, STATS
 
 from nbastats.ingest import sync_range, sync_schedule, sync_season
-from nbastats.metrics import boxscore
 from nbastats.ingest.sync import parse_minutes
+from nbastats.metrics import boxscore
 
 
 def _count(conn, table):

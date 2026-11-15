@@ -5,8 +5,15 @@ import math
 import pytest
 
 from nbastats.metrics.projecao import (
-    absence_share, blowout_probability, calibrate, evaluate, expected_margin, project,
-    recent_players, with_without, _lstsq,
+    _lstsq,
+    absence_share,
+    blowout_probability,
+    calibrate,
+    evaluate,
+    expected_margin,
+    project,
+    recent_players,
+    with_without,
 )
 from nbastats.metrics.zonas import load_zones, zone_matchup
 

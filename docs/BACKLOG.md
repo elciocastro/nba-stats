@@ -139,7 +139,8 @@ ritmo, saldo, desfalques, nota por critério, agenda, telas Matchups e DvP,
 - [x] 2e. Zonas de arremesso e encaixe com o adversário (ainda sem validação
   retroativa: é uma fotografia da temporada).
 - [ ] 2f. Recalibrar com a temporada 2026-27 a partir de dezembro.
-- [ ] 2g. Guardar a fotografia das zonas por dia, para validar o encaixe.
+- [x] 2g. Fotografia diária das zonas (`shot_zones_daily`, desde 15/11/2026);
+  validar o encaixe quando houver alguns meses.
 
 **Fase 3 — linhas de aposta e visual** (ver `docs/decisoes/0006-linhas-e-visual.md`)
 - [x] 3a. Linha e odds digitadas (detalhe do jogador, página Linhas ou
@@ -187,8 +188,8 @@ ritmo, saldo, desfalques, nota por critério, agenda, telas Matchups e DvP,
 - [x] 6a. Primeira versão dinâmica (página Props, fase 3d).
 - [x] 6b. Props no celular: cartões compactos, abas com rolagem lateral,
   filtros recolhidos, detalhe enxuto (conferido em 390 px e 1280 px).
-- [ ] 6d. Acesso pelo celular: rede espelhada do WSL ou `portproxy` (passo a
-  passo no README); senha obrigatória antes de abrir para a rede.
+- [x] 6d. Acesso pelo celular: rede espelhada do WSL ou `portproxy`, porta
+  8100 do site novo (passo a passo no README); criar usuários antes de abrir.
 - [x] 6e. Computador: tabela de calor (temporada, H2H, L5, L10, L20,
   anterior, projeção, DvP), layout escolhido pelo navegador ou na barra
   lateral, página do jogador em duas colunas (conferido em 1280 e 390 px).
@@ -233,8 +234,8 @@ ritmo, saldo, desfalques, nota por critério, agenda, telas Matchups e DvP,
   Sistema). `nbastats usuario criar|listar|senha|ativar|desativar`.
 - [x] 8b. Cron, backup diário e alerta de carga (3.4, 3.5, 3.6).
 - [x] 8c. CI no GitHub Actions: pytest e build do front em cada PR (6.5).
-- [ ] 8d. **Favoritos por usuário** (hoje são de todos). As apostas já são
-  por usuário (fase 9, com filtro Minhas/Todas).
+- [x] 8d. **Favoritos por usuário**: no primeiro acesso cada um recebe uma
+  cópia da lista compartilhada; os alertas olham os favoritos de todos.
 - [ ] 8e. Criar o primeiro admin no site da VPS quando subir de novo
   (Administração → criar; a senha única deixa de valer).
 
@@ -257,13 +258,23 @@ ritmo, saldo, desfalques, nota por critério, agenda, telas Matchups e DvP,
   favoritos").
 - [x] 9i. **PWA**: instalar no celular, ícone, funcionar com conexão ruim.
 - [ ] 9j. **Comparar linhas entre casas** (depende de 3b).
-- [ ] 9k. Alerta "a caminho de bater" no Ao Vivo (precisa consultar o placar
-  a cada poucos minutos durante os jogos).
-- [ ] 9l. Projeção de minutos com o risco de lavada já entrando por jogador
-  (hoje o recorte "Sem lavada" e o risco de blowout ficam separados).
-- [ ] 9m. A calibração mostrou o site **otimista na faixa 70–80%** (promete
-  ~72%, acerta ~61% nos 1.188 palpites do backtest). Investigar a cauda da
-  distribuição antes de ligar o selo/unidade (5i).
+- [x] 9k. Alertas ao vivo dos favoritos: "a caminho de bater" (chance ≥ 70%
+  no ritmo atual) e "bateu"; cron a cada 15 min até 2h (Telegram desligado).
+- [~] 9l. **Testado e descartado** (0012): os titulares perdem ~12% dos
+  minutos em lavadas, mas aplicar isso pelo risco do jogo mudou o erro médio
+  em menos de 0,1% em 2025 e 2026. Rever se a margem projetada melhorar.
+- [x] 9m. Otimismo na faixa 70–80%: era amostra pequena (13 palpites de pontos)
+  somada a um excesso real de confiança nos mercados de pontuação. Corrigido
+  com **encolhimento** por mercado ajustado fora da amostra (0012); faixas
+  com menos de 30 palpites ficam marcadas. Reavaliar antes do selo (5i).
+
+**Fase 10 — calibração, configurações e identidade** (ver `docs/decisoes/0012-calibracao-configuracoes-identidade.md`)
+- [x] 10a. Encolhimento da chance por mercado (9m).
+- [x] 10b. Parâmetros editáveis em Administração → Configurações (5.5).
+- [x] 10c. Identidade "Garrafão": nome, logo, cor de destaque, tema escuro/claro/sistema.
+- [ ] 10d. Gráficos novos (ideias em 0012): leque de distribuição na página
+  do jogador, minutos × produção, calibração por mercado, curva de lucro
+  com a banca. Escolher com o colega.
 
 ## 4. Métricas e análises — [P1] [?]
 
@@ -275,8 +286,8 @@ Dependem do item 2.3. Candidatas:
 - [x] **4.3 Comparar dois jogadores** lado a lado (página Comparar).
 - [x] **4.4 Desempenho contra um adversário** (H2H na página do jogador).
 - [x] **4.5 Casa e fora** (recortes na página do jogador).
-- [ ] **4.6 Filtro de playoffs**: já no Ranking; falta nas janelas do jogador
-  e na projeção.
+- [x] **4.6 Filtro de playoffs**: Ranking e janela "PO" do jogador. A
+  projeção segue só com a temporada regular (playoffs entram quando houver).
 - [ ] **4.7 Métricas avançadas** (usage, PER, on/off). Exigem outros
   endpoints; só se o colega pedir.
 
@@ -285,11 +296,11 @@ Dependem do item 2.3. Candidatas:
 - [x] **5.1 Busca de jogo por time e data**: chips dos jogos do dia na
   página Props (o box score ainda usa siglas).
 - [x] **5.2 Nomes de colunas legíveis** (site novo).
-- [ ] **5.3 Exportar tabela em CSV**: feito no Ranking; falta Props e Apostas.
-- [ ] **5.6 Filtro de playoffs** nas janelas do jogador (o Ranking já tem).
+- [x] **5.3 Exportar tabela em CSV**: Ranking, Props e Apostas.
+- [x] **5.6 Filtro de playoffs** nas janelas do jogador ("PO").
 - [x] **5.4 Mostrar a data da última atualização** (do `sync_log`).
-- [ ] **5.5 Editar os critérios de potencial pelo site** (hoje é o YAML).
-  Só depois que os critérios estabilizarem.
+- [x] **5.5 Editar os critérios pelo site**: Administração → Configurações
+  (potencial, matchup, projeção, BetânIAG, apostas, alertas e identidade).
 
 ## 6. Colocar no ar — [P1]
 
@@ -310,9 +321,9 @@ Pré-requisito: item 2.4 decidido (no servidor, só BALLDONTLIE funciona).
 
 - [x] **7.1 Migrations do schema**: `db.migrate` adiciona colunas novas em
   bancos antigos (lista `COLUMNS`); renomear/apagar coluna ainda é manual.
-- [ ] **7.2 Lint e formatação** (ruff) no CI.
-- [ ] **7.3 Teste de contrato das fontes**: teste opcional (marcado, fora do
-  CI) que chama a API real e confere os campos esperados.
+- [x] **7.2 Lint** (ruff) no CI.
+- [x] **7.3 Teste de contrato das fontes**: `NBASTATS_CONTRATO=1 pytest -m
+  contrato` (fora do CI) chama stats.nba.com, o CDN e o injury report.
 - [ ] **7.4 Postgres** se houver escrita concorrente ou hospedagem sem disco
   persistente.
 

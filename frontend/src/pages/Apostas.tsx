@@ -3,7 +3,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { api2, Bet, Resumo } from "../api";
-import { ddmm } from "../components";
+import { baixarCsv, ddmm } from "../components";
 
 const MK: Record<string, string> = { pts: "Pontos", reb: "Rebotes", ast: "Assist.", pra: "PRA", pr: "PR", pa: "PA", ra: "RA",
   fg3m: "3FM", fg3a: "3FA", fg2m: "2FM", fg2a: "2FA", ftm: "FTM", fta: "FTA", stl: "Roubos", blk: "Tocos", turnover: "Turnovers" };
@@ -31,6 +31,10 @@ export default function Apostas() {
         <span className="sp" style={{ flex: 1 }} />
         {por_usuario && <div className="seg">{([[false, "Minhas"], [true, "Todas"]] as const).map(([v, l]) =>
           <button key={l} className={v === todas ? "on" : ""} onClick={() => setTodas(v)}>{l}</button>)}</div>}
+        <button className="btn" disabled={!apostas.length} onClick={() => baixarCsv("apostas", apostas.map((b) => ({ ...b, etiquetas: b.etiquetas.join(" | ") })),
+          [["date", "Data"], ["jogador", "Jogador"], ["market", "Mercado"], ["side", "Lado"], ["line", "Linha"], ["odd", "Odd"],
+           ["units", "Unidades"], ["bookmaker", "Casa"], ["prob", "Chance"], ["proj", "Projeção"], ["status", "Status"],
+           ["actual", "Real"], ["profit_units", "Lucro (u)"], ["etiquetas", "Motivos"], ["note", "Nota"], ["usuario", "Quem"]])}>⤓ CSV</button>
         <button className="btn" disabled={conferir.isPending} onClick={() => conferir.mutate()}>
           {conferir.isPending ? "Conferindo…" : conferir.data ? `Conferidas: ${Object.values(conferir.data.conferidas).reduce((a, b) => a + b, 0)}` : "Conferir resultados"}</button>
       </div>

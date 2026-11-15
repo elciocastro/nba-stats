@@ -6,8 +6,15 @@ import math
 import pytest
 
 from nbastats.metrics.linhas import (
-    attach_lines, expected_value, fair_odd, find_player, hit_rates, lines_for, prob_over,
-    reference_line, save_line,
+    attach_lines,
+    expected_value,
+    fair_odd,
+    find_player,
+    hit_rates,
+    lines_for,
+    prob_over,
+    reference_line,
+    save_line,
 )
 from nbastats.metrics.projecao import _dispersion
 

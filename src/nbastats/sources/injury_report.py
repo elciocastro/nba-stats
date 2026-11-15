@@ -16,8 +16,9 @@ import io
 import re
 import time
 import unicodedata
+from collections.abc import Callable
 from datetime import datetime
-from typing import Any, Callable
+from typing import Any
 
 import requests
 

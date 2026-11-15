@@ -230,3 +230,21 @@ CREATE TABLE IF NOT EXISTS alerts_sent (
     key      TEXT PRIMARY KEY,
     sent_at  TEXT NOT NULL
 );
+
+-- Usuários que já receberam a cópia dos favoritos compartilhados (uma vez só).
+CREATE TABLE IF NOT EXISTS user_seeds (
+    user_id  INTEGER PRIMARY KEY
+);
+
+-- Fotografia diária das zonas (para validar o encaixe com o que se sabia no
+-- dia). id = data:temporada:kind:entidade:zona; upsert (a última carga do dia vale).
+CREATE TABLE IF NOT EXISTS shot_zones_daily (
+    id          TEXT PRIMARY KEY,
+    date        TEXT NOT NULL,
+    season      INTEGER NOT NULL,
+    kind        TEXT NOT NULL,
+    entity_id   INTEGER NOT NULL,
+    zone        TEXT NOT NULL,
+    fgm         REAL, fga REAL
+);
+CREATE INDEX IF NOT EXISTS idx_zones_daily ON shot_zones_daily (date, season, kind, entity_id);

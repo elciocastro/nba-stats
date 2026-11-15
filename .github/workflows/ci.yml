@@ -16,6 +16,8 @@ jobs:
           cache: pip
       - name: Dependências
         run: pip install -e ".[api,web,nbaapi,injury,dev]"
+      - name: ruff
+        run: ruff check src tests
       - name: pytest
         run: pytest -q
 

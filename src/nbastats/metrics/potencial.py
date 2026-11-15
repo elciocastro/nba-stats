@@ -9,7 +9,6 @@ from typing import Any
 import yaml
 
 from .. import ajustes as _aj
-
 from .queries import STATS, player_trends
 
 DEFAULT_RULES = Path("config/potencial.yaml")

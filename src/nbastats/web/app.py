@@ -14,18 +14,29 @@ from nbastats import db
 from nbastats.config import get_settings
 from nbastats.ingest import last_refresh, refresh
 from nbastats.metrics import (
-    MATCHUP_STATS, boxscore, dvp_table, load_matchup_rules, load_projection_params, load_rules,
+    MATCHUP_STATS,
+    boxscore,
+    dvp_table,
+    load_matchup_rules,
+    load_projection_params,
+    load_rules,
     matchup_report,
-    player_gamelog, player_trends, rank_potenciais, seasons,
+    player_gamelog,
+    player_trends,
+    rank_potenciais,
+    seasons,
 )
 from nbastats.metrics.apostas import (
-    delete_bet, list_bets, load_bet_config, performance, settle_bets,
+    delete_bet,
+    list_bets,
+    load_bet_config,
+    performance,
+    settle_bets,
 )
 from nbastats.metrics.linhas import lines_for, save_line
 from nbastats.sources import build_injury_source, build_source
 from nbastats.web import comparar as cmp_page
-from nbastats.web import inicio
-from nbastats.web import props
+from nbastats.web import inicio, props
 
 st.set_page_config(page_title="NBA Stats", page_icon="🏀", layout="wide")
 st.html("<style>@media (min-width: 900px) { .block-container { padding-left: 2rem; "
@@ -222,7 +233,8 @@ if page == "Apostas":
         bets = list_bets(conn, status=status)
         icon = {"ganha": "✅", "perdida": "❌", "devolvida": "↩️", "anulada": "⛔", "pendente": "⏳"}
         rows = [{"id": b["id"], "": icon.get(b["status"], ""), "Data": b["date"][8:] + "/" + b["date"][5:7],
-                 "Jogador": b["jogador"], "Aposta": f"{b['side'].capitalize()} {b['line']:g} {props.MARKETS.get(b['market'], b['market'])}",
+                 "Jogador": b["jogador"],
+                 "Aposta": f"{b['side'].capitalize()} {b['line']:g} {props.MARKETS.get(b['market'], b['market'])}",
                  "Odd": b["odd"], "Unid.": b["units"], "Chance": b["prob"],
                  "Real": "" if b["actual"] is None else f"{b['actual']:g}",
                  "Lucro (u)": "" if b["profit_units"] is None else f"{b['profit_units']:+.2f}",
@@ -302,7 +314,7 @@ if page == "Matchups (tabela)":
 
     rank_min = (rules.get("criterios", {}).get("dvp_temporada") or {}).get("rank_min", 26)
     with st.expander("Como ler"):
-        st.markdown(f"""
+        st.markdown("""
 - **Projeção**: o número esperado para o jogo. Taxa por minuto (L10 e temporada) × minutos
   esperados × defesa adversária × ritmo × ajuste por desfalques do próprio time, calibrado com a
   temporada passada. Fora da amostra, erra **2 a 4% menos que o L10** em todos os mercados.

@@ -1,5 +1,11 @@
 from .sync import (
-    last_refresh, refresh, sync_injuries, sync_range, sync_schedule, sync_season, sync_shot_zones,
+    last_refresh,
+    refresh,
+    sync_injuries,
+    sync_range,
+    sync_schedule,
+    sync_season,
+    sync_shot_zones,
 )
 
 __all__ = [

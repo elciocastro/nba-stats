@@ -94,6 +94,14 @@ def player_live(atual: float, minutos: float, faltas: int, pre: dict[str, Any], 
             "status": status, "alertas": flags}
 
 
+def pre_from_report(report: list[dict[str, Any]]) -> dict[int, dict[str, Any]]:
+    """Pré-análise de cada jogador (do relatório do dia) no formato de ``live_report``."""
+    return {p["player_id"]: {"proj": p.get("proj"), "min_esperado": (p.get("proj_detalhe") or {}).get("minutos"),
+                             "linha": p.get("linha"), "linha_ref": p.get("linha_ref"), "media": p.get("temporada"),
+                             "l10": p.get("l10"), "jogador": p["jogador"], "time": p["time"]}
+            for g in report for p in g["jogadores"]}
+
+
 def live_report(games: list[dict[str, Any]], pre: dict[int, dict[str, Any]], stat: str,
                 params: dict[str, Any], target: str = "linha") -> list[dict[str, Any]]:
     """Jogos ao vivo com os jogadores que têm pré-análise.
