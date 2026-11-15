@@ -119,6 +119,8 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("sync-agenda", help="grava os jogos agendados de hoje e amanhã")
     p.add_argument("--dias", type=int, default=2, help="quantos dias a partir de hoje")
 
+    p = sub.add_parser("importar-dados", help="traz as estatísticas de outro banco sem mexer em usuários e apostas")
+    p.add_argument("arquivo", help="banco SQLite de origem (ex.: cópia do data/nba.db do computador)")
     sub.add_parser("noticias", help="grava as manchetes (ESPN) e as transações da temporada (NBA)")
     p = sub.add_parser("lesoes", help="grava o injury report oficial mais recente")
 
@@ -231,6 +233,11 @@ def main(argv: list[str] | None = None) -> int:
         source = build_source(args.fonte or settings.fonte, settings)
         result = sync_schedule(conn, source, _next_days(args.dias))
         print(f"Agenda: {result['games']} jogos")
+
+    elif args.cmd == "importar-dados":
+        from .db import import_data
+        n = import_data(conn, args.arquivo)
+        print("Importado: " + ", ".join(f"{t} {k}" for t, k in n.items()))
 
     elif args.cmd == "noticias":
         from .ingest import sync_news

@@ -14,6 +14,8 @@
 #   07:00: calibracao (backtest da temporada atual, para a página Calibração)
 #   a cada 15 min, 12h-02h: alertas (inclui jogos em andamento) (Telegram; só se config/alertas.yaml habilitado)
 #   17:00: resumo do dia (Telegram; idem)
+#   com VPS_SYNC=1 (VPS_SYNC=1 deploy/cron.sh instalar): 10 min depois de cada
+#   atualizar, envia as estatísticas para o site da VPS (deploy/vps.sh dados)
 # flock evita duas cargas ao mesmo tempo. Logs em logs/cron.log.
 set -euo pipefail
 
@@ -35,6 +37,9 @@ linhas() {
 7,22,37,52 0-2,12-23 * * * $run alertas >> $LOG 2>&1 $TAG
 0 17 * * * $run resumo >> $LOG 2>&1 $TAG
 EOF
+  if [ -n "${VPS_SYNC:-}" ]; then
+    echo "10,25,40,55 0-2,10-23 * * * cd $DIR && flock -n $LOCK deploy/vps.sh dados >> $LOG 2>&1 $TAG"
+  fi
 }
 
 atual() { crontab -l 2>/dev/null | grep -v "$TAG" || true; }

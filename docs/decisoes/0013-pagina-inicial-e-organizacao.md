@@ -49,3 +49,26 @@ no menu.
 ## CI
 - Actions em Node 24 (`checkout`, `setup-python`, `setup-node` v7) e build
   do front em Node 24: some o aviso de Node 20 descontinuado.
+
+## Jogador sem jogo na data
+- Antes, abrir um jogador que não jogava no dia (Ranking, transações,
+  líderes) dava "não encontrado". Agora a página mostra o perfil
+  (`historico.player_profile`): histórico, médias, janelas contra a linha de
+  referência (L10 arredondado), playoffs e o próximo jogo do time, com um
+  botão que leva à data dele. Sem projeção, linha da casa nem aposta.
+- O time atual vem da transação mais recente quando ela é posterior ao último
+  jogo (contratado, trocado ou dispensado), porque o banco só sabe o time
+  pelo último jogo. Quem chegou a um time novo só entra nas projeções do dia
+  depois de jogar por ele (limitação conhecida).
+
+## VPS: o site é dono do uso, o computador manda as estatísticas
+- Com logins, copiar o banco inteiro a cada envio apagaria sessões, apostas,
+  linhas e favoritos feitos na VPS. `db.import_data` (CLI `importar-dados`)
+  faz upsert só das tabelas de dados (`DATA_TABLES`; `shot_zones` é trocada
+  inteira por ser fotografia) numa transação; as de uso ficam intactas.
+  `deploy/vps.sh` manda o banco inteiro só na primeira subida.
+- Cópia do banco pela API de backup do SQLite (consistente com o cron
+  gravando), sem depender do `sqlite3` de linha de comando.
+- HTTPS pelo Caddy que já roda na VPS (do NetSentinel), num subdomínio
+  próprio: o contêiner entra na rede do Caddy com o nome `nba-stats`.
+  `suporte.elciocastro.com` é o endereço do NetSentinel e fica como está.
