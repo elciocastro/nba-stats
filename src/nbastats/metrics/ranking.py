@@ -24,8 +24,10 @@ def _ts(pts: float, fga: float, fta: float) -> float | None:
 
 
 def ranking(conn: sqlite3.Connection, season: int, last_n: int = 10, min_games: int = 1,
-            per36: bool = False, postseason: bool = False) -> list[dict[str, Any]]:
-    """Uma linha por jogador. Com ``per36`` as contagens viram por 36 minutos."""
+            per36: bool = False, postseason: bool = False, max_margem: int | None = None) -> list[dict[str, Any]]:
+    """Uma linha por jogador. Com ``per36`` as contagens viram por 36 minutos.
+    ``max_margem``: tira os jogos decididos por essa diferença ou mais (lavadas,
+    em que os titulares saem cedo)."""
     sql = """
         SELECT s.player_id, s.team_id, s.minutes, s.pts, s.reb, s.ast, s.stl, s.blk, s.fg3m,
                s.turnover, s.oreb, s.dreb, s.pf, s.fgm, s.fga, s.fg3a, s.ftm, s.fta, s.plus_minus,
@@ -33,10 +35,12 @@ def ranking(conn: sqlite3.Connection, season: int, last_n: int = 10, min_games: 
         FROM player_game_stats s JOIN games g ON g.id = s.game_id
         LEFT JOIN teams t ON t.id = s.team_id
         WHERE g.season = ? AND g.postseason = ? AND s.minutes > 0
+          AND (:m IS NULL OR ABS(COALESCE(g.home_team_score, 0) - COALESCE(g.visitor_team_score, 0)) < :m)
         ORDER BY s.player_id, g.date DESC, g.id DESC
     """
     by: dict[int, list[sqlite3.Row]] = {}
-    for r in conn.execute(sql, (season, int(postseason))):
+    for r in conn.execute(sql.replace("= ? AND g.postseason = ?", "= :s AND g.postseason = :p"),
+                          {"s": season, "p": int(postseason), "m": max_margem}):
         by.setdefault(r["player_id"], []).append(r)
     names = {r["id"]: (f"{r['first_name'] or ''} {r['last_name'] or ''}".strip(), r["position"])
              for r in conn.execute("SELECT id, first_name, last_name, position FROM players")}

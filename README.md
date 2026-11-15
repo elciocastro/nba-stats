@@ -195,6 +195,26 @@ uvicorn nbastats.api.app:app --port 8100     # API + site em http://localhost:81
 
 API documentada em `/api/docs`.
 
+### Calibração, cascata, alertas e app no celular
+
+- **Calibração** (menu): "quando o site disse X%, acertou quanto?", com o
+  backtest da temporada (`nbastats calibracao`, diário no cron), as previsões
+  guardadas antes de cada jogo (`nbastats previsoes`, de hora em hora) e as
+  apostas registradas.
+- **Notícias → Efeito cascata**: quem ganha com cada desfalque do dia (média
+  com/sem o companheiro e projeção contra a linha).
+- **Apostas**: motivo (etiquetas) e nota em cada aposta, desempenho por
+  motivo, "Minhas/Todas" com login e **jogo responsável** (limites por dia e
+  por 7 dias e aviso de derrotas seguidas, em `config/apostas.yaml`).
+- **Props**: chance mínima, lado, só linha da casa, sem dúvida de lesão e
+  **Meus filtros** (salvos por usuário). Ranking e jogador: **sem lavadas**.
+- **Telegram** (desligado): crie um bot no @BotFather, ponha
+  `NBASTATS_TELEGRAM_TOKEN` e `NBASTATS_TELEGRAM_CHAT` no `.env` e
+  `habilitado: true` em `config/alertas.yaml`. O cron manda alertas dos
+  favoritos (lesão, linha com valor) a cada 15 min e o resumo às 17h. Teste
+  sem enviar: `nbastats resumo --simular` / `nbastats alertas --simular`.
+- **App no celular**: no Chrome/Safari, "Adicionar à tela inicial" (PWA).
+
 ### Acesso e administração
 
 - Sem usuários e sem `NBASTATS_PASSWORD`: aberto (uso local).

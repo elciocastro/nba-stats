@@ -12,14 +12,15 @@ const STATUS = ["pendente", "ganha", "perdida", "devolvida", "anulada"];
 
 export default function Apostas() {
   const [status, setStatus] = useState<string | undefined>();
+  const [todas, setTodas] = useState(false);
   const qc = useQueryClient();
-  const q = useQuery({ queryKey: ["apostas", status], queryFn: () => api2.apostas(status) });
+  const q = useQuery({ queryKey: ["apostas", status, todas], queryFn: () => api2.apostas(status, todas) });
   const conferir = useMutation({ mutationFn: api2.conferir, onSuccess: () => qc.invalidateQueries({ queryKey: ["apostas"] }) });
   const apagar = useMutation({ mutationFn: api2.apagarAposta, onSuccess: () => qc.invalidateQueries({ queryKey: ["apostas"] }) });
 
   if (q.isLoading) return <div className="loading">Carregando…</div>;
   if (q.error) return <div className="err">{String((q.error as Error).message)}</div>;
-  const { apostas, desempenho: d, config } = q.data!;
+  const { apostas, desempenho: d, config, limites: lim, por_usuario } = q.data!;
   const g = d.geral;
   const cls = g.lucro_unidades > 0 ? "over" : g.lucro_unidades < 0 ? "under" : "";
 
@@ -27,9 +28,13 @@ export default function Apostas() {
     <>
       <div className="row" style={{ justifyContent: "space-between" }}>
         <h1>Apostas</h1>
+        <span className="sp" style={{ flex: 1 }} />
+        {por_usuario && <div className="seg">{([[false, "Minhas"], [true, "Todas"]] as const).map(([v, l]) =>
+          <button key={l} className={v === todas ? "on" : ""} onClick={() => setTodas(v)}>{l}</button>)}</div>}
         <button className="btn" disabled={conferir.isPending} onClick={() => conferir.mutate()}>
           {conferir.isPending ? "Conferindo…" : conferir.data ? `Conferidas: ${Object.values(conferir.data.conferidas).reduce((a, b) => a + b, 0)}` : "Conferir resultados"}</button>
       </div>
+      <Limites l={lim} />
       {!g.apostas ? (
         <p className="muted">Nenhuma aposta registrada. Registre pela página do jogador (“Registrar aposta”).</p>
       ) : (
@@ -62,7 +67,7 @@ export default function Apostas() {
         {STATUS.map((s) => <button key={s} className={`tab ${s === status ? "on" : ""}`} onClick={() => setStatus(s)}>{ICON[s]} {s}</button>)}
       </div>
       <div className="tw"><table className="t">
-        <thead><tr><th>Jogador</th><th>Aposta</th><th>Odd</th><th>Unid.</th><th>Chance</th><th>Real</th><th>Lucro</th><th>Data</th><th>Casa</th><th></th></tr></thead>
+        <thead><tr><th>Jogador</th><th>Aposta</th><th>Odd</th><th>Unid.</th><th>Chance</th><th>Real</th><th>Lucro</th><th>Data</th><th>Casa</th><th>Motivo</th>{todas && <th>Quem</th>}<th></th></tr></thead>
         <tbody>{apostas.map((b: Bet) => (
           <tr key={b.id}>
             <td>{ICON[b.status]} <b>{b.jogador}</b></td>
@@ -73,6 +78,8 @@ export default function Apostas() {
             <td className={b.profit_units == null ? "" : b.profit_units > 0 ? "over" : b.profit_units < 0 ? "under" : ""}>
               {b.profit_units == null ? "—" : `${b.profit_units > 0 ? "+" : ""}${b.profit_units.toFixed(2)}`}</td>
             <td>{ddmm(b.date)}</td><td>{b.bookmaker ?? ""}</td>
+            <td className="small" style={{ whiteSpace: "normal", minWidth: 120 }} title={b.note ?? ""}>{b.etiquetas.join(", ")}{b.note ? " 📝" : ""}</td>
+            {todas && <td className="small">{b.usuario ?? "—"}</td>}
             <td><button className="star" title="Apagar" onClick={() => confirm(`Apagar a aposta em ${b.jogador}?`) && apagar.mutate(b.id)}>🗑</button></td>
           </tr>))}
         </tbody></table>
@@ -83,7 +90,7 @@ export default function Apostas() {
         <>
           <h2>Desempenho por grupo</h2>
           <div className="grid2">
-            {([["mercado", "Por mercado"], ["unidades", "Por unidades"], ["faixa_chance", "Por faixa de chance calculada"], ["lado", "Over × under"]] as const).map(([k, title]) => (
+            {([["etiqueta", "Por motivo (diário)"], ["mercado", "Por mercado"], ["unidades", "Por unidades"], ["faixa_chance", "Por faixa de chance calculada"], ["lado", "Over × under"]] as const).map(([k, title]) => (
               <div key={k}><div className="small muted" style={{ marginBottom: 4 }}>{title}</div><Group rows={d[k]} label={k === "mercado" ? (x) => MK[x] ?? x : (x) => x} /></div>))}
           </div>
         </>
@@ -102,5 +109,27 @@ function Group({ rows, label }: { rows: Record<string, Resumo>; label: (k: strin
           <td className={v.lucro_unidades > 0 ? "over" : v.lucro_unidades < 0 ? "under" : ""}>{v.lucro_unidades}</td>
           <td>{v.roi_pct == null ? "—" : `${v.roi_pct}%`}</td></tr>))}
       </tbody></table></div>
+  );
+}
+
+function Limites({ l }: { l: import("../api").Limites }) {
+  const bar = (v: number, lim: number | null) => lim ? Math.min(100, Math.round(100 * v / lim)) : 0;
+  const item = (label: string, v: number, lim: number | null) => (
+    <div style={{ flex: 1, minWidth: 140 }}>
+      <div className="small muted">{label}: <b style={{ color: lim && v > lim ? "var(--under)" : "var(--text)" }}>{v}</b>{lim ? ` de ${lim} u` : " u"}</div>
+      {lim ? <div style={{ height: 6, background: "var(--panel2)", borderRadius: 3, marginTop: 4 }}>
+        <div style={{ width: `${bar(v, lim)}%`, height: 6, borderRadius: 3, background: v > lim ? "var(--under)" : bar(v, lim) >= 80 ? "#f59e0b" : "var(--over)" }} /></div> : null}
+    </div>);
+  return (
+    <div className="panel" style={{ margin: "12px 0" }}>
+      <div className="row" style={{ gap: 18 }}>
+        <b className="small">Jogo responsável</b>
+        {item("Hoje", l.dia.unidades, l.dia.limite)}
+        {item("Últimos 7 dias", l.semana.unidades, l.semana.limite)}
+        <div className="small muted">Derrotas seguidas: <b style={{ color: l.limite_sequencia && l.sequencia_perdas >= l.limite_sequencia ? "var(--under)" : "var(--text)" }}>{l.sequencia_perdas}</b></div>
+      </div>
+      {l.avisos.length > 0 && <div className="small" style={{ color: "#fcd9b6", marginTop: 6 }}>⚠ {l.avisos.join(" ")}</div>}
+      <div className="muted small" style={{ marginTop: 4 }}>Limites em config/apostas.yaml. Ao passar, o site pede confirmação antes de registrar.</div>
+    </div>
   );
 }

@@ -188,3 +188,45 @@ CREATE TABLE IF NOT EXISTS access_log (
     motivo    TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_access_quando ON access_log (quando);
+
+-- Previsões mostradas antes do jogo (para a calibração pública).
+-- id = data:jogador:mercado; atualiza até o início do jogo.
+CREATE TABLE IF NOT EXISTS predictions (
+    id          TEXT PRIMARY KEY,
+    date        TEXT NOT NULL,
+    game_id     INTEGER,
+    player_id   INTEGER NOT NULL,
+    market      TEXT NOT NULL,
+    line        REAL NOT NULL,
+    line_ref    INTEGER NOT NULL DEFAULT 0,   -- 1 = linha de referência (L10), 0 = da casa
+    proj        REAL,
+    p_over      REAL NOT NULL,
+    updated_at  TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_predictions_market ON predictions (market, date);
+
+-- Resultados de calibração calculados offline (backtest). id = fonte:temporada.
+CREATE TABLE IF NOT EXISTS calibration (
+    id             TEXT PRIMARY KEY,
+    fonte          TEXT NOT NULL,
+    temporada      INTEGER,
+    desde          TEXT,
+    dados          TEXT NOT NULL,      -- JSON {mercado: resumo}
+    atualizado_em  TEXT
+);
+
+-- Filtros salvos da página Props (por usuário; user_id NULL = sem login).
+CREATE TABLE IF NOT EXISTS saved_filters (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id     INTEGER,
+    nome        TEXT NOT NULL,
+    params      TEXT NOT NULL,       -- JSON com os filtros
+    criado_em   TEXT NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_filters_user_nome ON saved_filters (COALESCE(user_id, 0), nome);
+
+-- Alertas já enviados (não repetir). key = tipo:data:...; sent_at em UTC.
+CREATE TABLE IF NOT EXISTS alerts_sent (
+    key      TEXT PRIMARY KEY,
+    sent_at  TEXT NOT NULL
+);

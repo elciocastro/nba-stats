@@ -106,6 +106,22 @@ def test_apostas_pela_api(client):
     assert client.get("/api/apostas").json()["apostas"] == []
 
 
+def test_aposta_com_etiqueta_e_limite(client, monkeypatch):
+    from nbastats.metrics import apostas as ap
+    monkeypatch.setattr(ap, "load_bet_config", lambda *a: {"jogo_responsavel": {"limite_unidades_dia": 1},
+                                                           "etiquetas": ["H2H"]})
+    q = {"data": "2026-11-07", "mercado": "pts"}
+    pid = client.get("/api/props", params=q).json()["jogadores"][0]["player_id"]
+    base = {**q, "player_id": pid, "lado": "over", "linha": 10.5, "odd": 1.9, "etiquetas": ["H2H"]}
+    assert client.post("/api/apostas", json={**base, "unidades": 1}).status_code == 200
+    r = client.post("/api/apostas", json={**base, "unidades": 1})
+    assert r.status_code == 409 and "limite do dia" in r.json()["avisos"][0]
+    assert client.post("/api/apostas", json={**base, "unidades": 1, "confirmar": True}).status_code == 200
+    body = client.get("/api/apostas").json()
+    assert body["apostas"][0]["etiquetas"] == ["H2H"] and body["config"]["etiquetas"] == ["H2H"]
+    assert "H2H" in body["desempenho"]["etiqueta"]
+
+
 def test_comparar_tendencias_e_noticias(client):
     ts = client.get("/api/times").json()
     assert {t["sigla"] for t in ts} == {"AAA", "BBB", "CCC"}
@@ -167,3 +183,23 @@ def test_sistema_e_backup(client, monkeypatch, tmp_path):
     assert {"carga", "backup", "cargas"} <= set(st)
     assert client.post("/api/admin/backup").json()["quantidade"] == 1
     assert "alerta" in client.get("/api/meta").json()
+
+
+def test_calibracao(client):
+    r = client.get("/api/calibracao").json()
+    assert {"backtest", "previsoes", "apostas"} <= set(r)
+    assert r["previsoes"]["geral"]["n"] == 0
+
+
+def test_cascata(client):
+    r = client.get("/api/cascata", params={"data": "2026-11-07"}).json()
+    assert r["mercado"] == "pra" and isinstance(r["desfalques"], list)
+    assert client.get("/api/cascata", params={"mercado": "x"}).status_code == 400
+
+
+def test_filtros_salvos(client):
+    r = client.post("/api/filtros", json={"nome": "PRA 60", "params": {"mercado": "pra", "chance_min": 60}}).json()
+    fid = r["filtros"][0]["id"]
+    assert client.get("/api/filtros").json()["filtros"][0]["params"]["chance_min"] == 60
+    assert client.delete(f"/api/filtros/{fid}").json()["filtros"] == []
+    assert client.post("/api/filtros", json={"nome": "", "params": {}}).status_code == 422

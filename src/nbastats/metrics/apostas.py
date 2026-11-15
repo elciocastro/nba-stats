@@ -41,7 +41,7 @@ def _now() -> str:
 def add_bet(conn: sqlite3.Connection, *, day: str, player_id: int, market: str, side: str,
             line: float, odd: float, units: float, game_id: int | None = None,
             bookmaker: str | None = None, prob: float | None = None, proj: float | None = None,
-            note: str | None = None) -> int:
+            note: str | None = None, tags: list[str] | None = None, user_id: int | None = None) -> int:
     if side not in SIDES:
         raise ValueError(f"Lado inválido: {side}. Use over ou under.")
     if odd <= 1 or units <= 0:
@@ -49,10 +49,20 @@ def add_bet(conn: sqlite3.Connection, *, day: str, player_id: int, market: str, 
     ev = prob * odd - 1 if prob is not None else None
     cur = conn.execute(
         "INSERT INTO bets (created_at, date, game_id, player_id, market, side, line, odd, units,"
-        " bookmaker, prob, proj, ev, note) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        (_now(), day, game_id, player_id, market, side, line, odd, units, bookmaker, prob, proj, ev, note))
+        " bookmaker, prob, proj, ev, note, tags, user_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (_now(), day, game_id, player_id, market, side, line, odd, units, bookmaker, prob, proj, ev, note,
+         _join_tags(tags), user_id))
     conn.commit()
     return cur.lastrowid
+
+
+def _join_tags(tags: list[str] | None) -> str | None:
+    clean = [t.strip().replace(",", " ") for t in tags or [] if t and t.strip()]
+    return ",".join(dict.fromkeys(clean)) or None
+
+
+def split_tags(value: str | None) -> list[str]:
+    return [t for t in (value or "").split(",") if t]
 
 
 def delete_bet(conn: sqlite3.Connection, bet_id: int) -> None:
@@ -119,19 +129,23 @@ def settle_bets(conn: sqlite3.Connection, config: dict[str, Any] | None = None) 
 
 
 def list_bets(conn: sqlite3.Connection, status: str | None = None,
-              since: str | None = None) -> list[dict[str, Any]]:
+              since: str | None = None, user_id: int | None = None) -> list[dict[str, Any]]:
+    """``user_id``: só as apostas dessa pessoa (None = todas)."""
     sql = """
         SELECT b.*, p.first_name || ' ' || p.last_name AS jogador,
-               h.abbreviation AS casa_time, v.abbreviation AS fora_time
+               h.abbreviation AS casa_time, v.abbreviation AS fora_time, u.nome AS usuario
         FROM bets b
+        LEFT JOIN users u ON u.id = b.user_id
         LEFT JOIN players p ON p.id = b.player_id
         LEFT JOIN games g ON g.id = b.game_id
         LEFT JOIN teams h ON h.id = g.home_team_id
         LEFT JOIN teams v ON v.id = g.visitor_team_id
         WHERE (:status IS NULL OR b.status = :status) AND (:since IS NULL OR b.date >= :since)
+          AND (:uid IS NULL OR b.user_id = :uid)
         ORDER BY b.date DESC, b.id DESC
     """
-    return [dict(r) for r in conn.execute(sql, {"status": status, "since": since})]
+    return [dict(r) | {"etiquetas": split_tags(r["tags"])}
+            for r in conn.execute(sql, {"status": status, "since": since, "uid": user_id})]
 
 
 def _summary(bets: list[dict[str, Any]]) -> dict[str, Any]:
@@ -165,13 +179,17 @@ def _band(prob: float | None) -> str:
     return "sem chance"
 
 
-def performance(conn: sqlite3.Connection, since: str | None = None) -> dict[str, Any]:
-    """Resumo geral e por mercado, por unidades e por faixa de chance, mais a
-    curva de lucro acumulado (unidades) por dia."""
-    bets = list_bets(conn, since=since)
+def performance(conn: sqlite3.Connection, since: str | None = None, user_id: int | None = None) -> dict[str, Any]:
+    """Resumo geral e por mercado, por unidades, por faixa de chance, por lado e
+    por etiqueta (uma aposta com duas etiquetas conta nas duas), mais a curva
+    de lucro acumulado (unidades) por dia."""
+    bets = list_bets(conn, since=since, user_id=user_id)
     groups: dict[str, dict[str, list]] = {"mercado": defaultdict(list), "unidades": defaultdict(list),
-                                           "faixa_chance": defaultdict(list), "lado": defaultdict(list)}
+                                           "faixa_chance": defaultdict(list), "lado": defaultdict(list),
+                                           "etiqueta": defaultdict(list)}
     for b in bets:
+        for t in b["etiquetas"] or ["sem etiqueta"]:
+            groups["etiqueta"][t].append(b)
         groups["mercado"][b["market"]].append(b)
         groups["unidades"][f"{b['units']:g} u"].append(b)
         groups["faixa_chance"][_band(b["prob"])].append(b)
@@ -189,3 +207,35 @@ def performance(conn: sqlite3.Connection, since: str | None = None) -> dict[str,
         **{k: {name: _summary(v) for name, v in sorted(g.items())} for k, g in groups.items()},
         "curva": curve,
     }
+
+
+# ---------- jogo responsável ----------
+
+def limits(conn: sqlite3.Connection, day: str, config: dict[str, Any] | None = None,
+           user_id: int | None = None, extra_units: float = 0.0) -> dict[str, Any]:
+    """Unidades no dia e na semana (dia e os 6 anteriores) contra os limites e a
+    sequência atual de derrotas. ``extra_units`` simula uma aposta nova."""
+    from datetime import date as _date, timedelta
+    cfg = ((config if config is not None else load_bet_config()).get("jogo_responsavel") or {})
+    d = _date.fromisoformat(day)
+    week0 = (d - timedelta(days=6)).isoformat()
+    bets = list_bets(conn, user_id=user_id, since=week0)
+    bets = [b for b in bets if b["date"] <= day and b["status"] != "anulada"]
+    dia = sum(b["units"] for b in bets if b["date"] == day) + extra_units
+    semana = sum(b["units"] for b in bets) + extra_units
+    streak = 0
+    for b in sorted((b for b in list_bets(conn, user_id=user_id) if b["status"] in ("ganha", "perdida")),
+                    key=lambda b: (b["settled_at"] or "", b["id"]), reverse=True):
+        if b["status"] != "perdida":
+            break
+        streak += 1
+    avisos = []
+    lim_d, lim_s, lim_seq = cfg.get("limite_unidades_dia"), cfg.get("limite_unidades_semana"), cfg.get("aviso_sequencia_perdas")
+    if lim_d and dia > lim_d:
+        avisos.append(f"Passa do limite do dia: {dia:g} de {lim_d:g} unidades.")
+    if lim_s and semana > lim_s:
+        avisos.append(f"Passa do limite da semana: {semana:g} de {lim_s:g} unidades.")
+    if lim_seq and streak >= lim_seq:
+        avisos.append(f"{streak} derrotas seguidas. Vale uma pausa antes da próxima.")
+    return {"dia": {"unidades": round(dia, 2), "limite": lim_d}, "semana": {"unidades": round(semana, 2), "limite": lim_s},
+            "sequencia_perdas": streak, "limite_sequencia": lim_seq, "avisos": avisos}
