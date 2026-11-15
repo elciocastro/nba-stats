@@ -15,7 +15,7 @@ jobs:
           python-version: "3.12"
           cache: pip
       - name: Dependências
-        run: pip install -e ".[api,nbaapi,injury,dev]"
+        run: pip install -e ".[api,web,nbaapi,injury,dev]"
       - name: pytest
         run: pytest -q
 
