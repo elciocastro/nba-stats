@@ -88,3 +88,10 @@ def conn():
     c = db.connect(":memory:")
     db.init_db(c)
     return c
+
+
+@pytest.fixture(autouse=True)
+def _ajustes_isolados(tmp_path, monkeypatch):
+    """Ajustes da Administração numa pasta temporária: os do ambiente não
+    interferem nos testes (e os testes não gravam no data/ de verdade)."""
+    monkeypatch.setenv("NBASTATS_AJUSTES", str(tmp_path / "ajustes"))

@@ -52,9 +52,9 @@ export default function Apostas() {
           {d.curva.length >= 2 && (
             <div className="chart"><ResponsiveContainer width="100%" height={200}>
               <AreaChart data={d.curva.map((c) => ({ ...c, x: ddmm(c.data) }))} margin={{ top: 8, right: 12, left: -12, bottom: 0 }}>
-                <CartesianGrid vertical={false} stroke="#1d2632" />
-                <XAxis dataKey="x" tick={{ fill: "#8b98a9", fontSize: 11 }} /><YAxis tick={{ fill: "#8b98a9", fontSize: 11 }} />
-                <Tooltip contentStyle={{ background: "#121821", border: "1px solid #263040" }} formatter={(v) => [`${v} u`, "lucro acumulado"]} />
+                <CartesianGrid vertical={false} stroke="var(--grid)" />
+                <XAxis dataKey="x" tick={{ fill: "var(--muted)", fontSize: 11 }} /><YAxis tick={{ fill: "var(--muted)", fontSize: 11 }} />
+                <Tooltip contentStyle={{ background: "var(--panel)", border: "1px solid var(--line)", color: "var(--text)" }} formatter={(v) => [`${v} u`, "lucro acumulado"]} />
                 <Area dataKey="lucro_acumulado" stroke="#22c55e" fill="#22c55e" fillOpacity={0.12} />
               </AreaChart></ResponsiveContainer></div>
           )}
@@ -128,7 +128,7 @@ function Limites({ l }: { l: import("../api").Limites }) {
         {item("Últimos 7 dias", l.semana.unidades, l.semana.limite)}
         <div className="small muted">Derrotas seguidas: <b style={{ color: l.limite_sequencia && l.sequencia_perdas >= l.limite_sequencia ? "var(--under)" : "var(--text)" }}>{l.sequencia_perdas}</b></div>
       </div>
-      {l.avisos.length > 0 && <div className="small" style={{ color: "#fcd9b6", marginTop: 6 }}>⚠ {l.avisos.join(" ")}</div>}
+      {l.avisos.length > 0 && <div className="small" style={{ color: "var(--warn-t)", marginTop: 6 }}>⚠ {l.avisos.join(" ")}</div>}
       <div className="muted small" style={{ marginTop: 4 }}>Limites em config/apostas.yaml. Ao passar, o site pede confirmação antes de registrar.</div>
     </div>
   );

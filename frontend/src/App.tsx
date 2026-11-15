@@ -13,6 +13,7 @@ import Ranking from "./pages/Ranking";
 import Jogos from "./pages/Jogos";
 import Admin from "./pages/Admin";
 import Calibracao from "./pages/Calibracao";
+import { BotaoTema, Logo, Site, useMarca } from "./marca";
 
 type Prefs = { data: string; setData: (d: string) => void; betaniag: boolean; setBetaniag: (b: boolean) => void };
 const Ctx = createContext<Prefs>(null!);
@@ -27,7 +28,7 @@ const qc = new QueryClient({
   defaultOptions: { queries: { staleTime: 60_000, retry: (n, e) => !(e instanceof SenhaError) && n < 1 } },
 });
 
-function Login({ modo, onOk }: { modo: Modo; onOk: () => void }) {
+function Login({ modo, onOk, site }: { modo: Modo; onOk: () => void; site?: Site | null }) {
   const [login, setLogin] = useState("");
   const [s, setS] = useState("");
   const [err, setErr] = useState("");
@@ -38,7 +39,8 @@ function Login({ modo, onOk }: { modo: Modo; onOk: () => void }) {
       setBusy(true);
       try { await api.login(login, s); onOk(); } catch (x) { setErr((x as Error).message); } finally { setBusy(false); }
     }}>
-      <h1>🏀 NBA Stats</h1>
+      <h1 className="brand" style={{ gap: 8 }}><Logo size={34} /> {site?.nome ?? "NBA Stats"}</h1>
+      {site?.subtitulo && <p className="muted small" style={{ margin: "-4px 0 4px" }}>{site.subtitulo}</p>}
       {modo === "usuarios" && <input className="input" placeholder="Login" value={login} autoFocus autoComplete="username"
         autoCapitalize="none" onChange={(e) => setLogin(e.target.value)} />}
       <input className="input" type="password" placeholder="Senha" value={s} autoFocus={modo !== "usuarios"}
@@ -80,16 +82,18 @@ function Shell() {
   const [betaniag, setB] = useState(() => { try { return localStorage.getItem("betaniag") === "1"; } catch { return false; } });
   const setBetaniag = (b: boolean) => { try { localStorage.setItem("betaniag", b ? "1" : "0"); } catch { /* sem storage */ } setB(b); };
   const meta = useQuery({ queryKey: ["meta"], queryFn: api.meta });
+  const saude = useQuery({ queryKey: ["saude"], queryFn: api.saude, staleTime: 600_000 });
+  const marca = useMarca(meta.data?.site ?? saude.data?.site);
   const [, force] = useState(0);
   const reload = () => { qc.clear(); force((x) => x + 1); };
-  if (meta.error instanceof SenhaError) return <Login modo={meta.error.modo} onOk={reload} />;
+  if (meta.error instanceof SenhaError) return <Login modo={meta.error.modo} onOk={reload} site={saude.data?.site} />;
   if (meta.data?.usuario?.trocar_senha) return <TrocarSenha obrigatoria onOk={reload} />;
   const m = meta.data;
 
   return (
     <Ctx.Provider value={{ data, setData, betaniag, setBetaniag }}>
       <header className="top">
-        <span className="brand">🏀 <span className="lbl">NBA Stats</span></span>
+        <NavLink to="/" className="brand"><Logo /><span className="lbl">{m?.site?.nome ?? "NBA Stats"}</span></NavLink>
         <nav className="nav">
           <NavLink to="/" end>Início</NavLink>
           <NavLink to="/props">Props</NavLink>
@@ -105,6 +109,7 @@ function Shell() {
         <Atualizar />
         <label className="toggle"><input type="checkbox" checked={betaniag} onChange={(e) => setBetaniag(e.target.checked)} />BetânIAG</label>
         <input className="input" type="date" value={data} onChange={(e) => e.target.value && setData(e.target.value)} />
+        <BotaoTema {...marca} />
         {m && <Conta meta={m} />}
       </header>
       {m?.alerta && <div className="alerta">⚠ {m.alerta}</div>}

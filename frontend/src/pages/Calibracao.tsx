@@ -1,10 +1,11 @@
 // Calibração pública: quando o site disse X% para um lado, quanto acertou.
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Bar, BarChart, CartesianGrid, Cell, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { CalResumo, calibracao } from "../api";
 import { MARKETS } from "./Props";
 
+const POUCOS = 30; // faixa com menos palpites que isto: ruído, não conclusão
 const PRINCIPAIS = ["pts", "reb", "ast", "pra", "fg3m", "pr", "pa", "ra", "stl", "blk", "turnover"];
 
 export default function Calibracao() {
@@ -65,17 +66,21 @@ function Grafico({ r }: { r?: CalResumo }) {
     <div className="chart">
       <div className="small muted" style={{ padding: "0 8px" }}>{r.n} palpites · acerto {r.acerto_pct}% com chance média {r.chance_media_pct}% · Brier {r.brier}</div>
       <ResponsiveContainer width="100%" height={260}>
-        <BarChart data={r.faixas} margin={{ top: 10, right: 8, left: -16, bottom: 0 }}>
-          <CartesianGrid vertical={false} stroke="#1d2632" />
-          <XAxis dataKey="faixa" tick={{ fill: "#8b98a9", fontSize: 11 }} />
-          <YAxis domain={[40, 100]} tick={{ fill: "#8b98a9", fontSize: 11 }} unit="%" />
-          <Tooltip contentStyle={{ background: "#121821", border: "1px solid #263040" }}
+        <BarChart data={r.faixas.map((f) => ({ ...f, rotulo: f.n < POUCOS ? `${f.faixa}*` : f.faixa }))} margin={{ top: 10, right: 8, left: -16, bottom: 0 }}>
+          <CartesianGrid vertical={false} stroke="var(--grid)" />
+          <XAxis dataKey="rotulo" tick={{ fill: "var(--muted)", fontSize: 11 }} />
+          <YAxis domain={[40, 100]} tick={{ fill: "var(--muted)", fontSize: 11 }} unit="%" />
+          <Tooltip contentStyle={{ background: "var(--panel)", border: "1px solid var(--line)", color: "var(--text)" }}
             formatter={(v, n, p) => [`${v}%${n === "Acerto real" ? ` (${p.payload.n} palpites)` : ""}`, n]} />
           <Legend />
-          <Bar dataKey="chance_media_pct" name="Chance prometida" fill="#64748b" radius={[2, 2, 0, 0]} />
-          <Bar dataKey="acerto_pct" name="Acerto real" fill="#22c55e" radius={[2, 2, 0, 0]} />
+          <Bar dataKey="chance_media_pct" name="Chance prometida" fill="var(--muted)" radius={[2, 2, 0, 0]} />
+          <Bar dataKey="acerto_pct" name="Acerto real" fill="#22c55e" radius={[2, 2, 0, 0]}>
+            {r.faixas.map((f, i) => <Cell key={i} fill="#22c55e" fillOpacity={f.n < POUCOS ? 0.35 : 1} />)}
+          </Bar>
         </BarChart>
       </ResponsiveContainer>
+      {r.faixas.some((f) => f.n < POUCOS) && <div className="muted small" style={{ padding: "0 8px" }}>
+        * menos de {POUCOS} palpites na faixa (barra clara): é ruído, não dá para tirar conclusão.</div>}
     </div>
   );
 }
@@ -86,7 +91,7 @@ function Faixas({ r }: { r: CalResumo }) {
       <thead><tr><th>Faixa</th><th>Palpites</th><th>Chance</th><th>Acerto</th><th>Diferença</th></tr></thead>
       <tbody>{r.faixas.map((f) => {
         const d = Math.round((f.acerto_pct - f.chance_media_pct) * 10) / 10;
-        return <tr key={f.faixa}><td>{f.faixa}</td><td>{f.n}</td><td>{f.chance_media_pct}%</td><td>{f.acerto_pct}%</td>
+        return <tr key={f.faixa} style={f.n < POUCOS ? { opacity: 0.55 } : undefined}><td>{f.faixa}{f.n < POUCOS ? " *" : ""}</td><td>{f.n}</td><td>{f.chance_media_pct}%</td><td>{f.acerto_pct}%</td>
           <td className={Math.abs(d) < 3 ? "" : d > 0 ? "over" : "under"}>{d > 0 ? "+" : ""}{d} p.p.</td></tr>;
       })}</tbody></table></div>
   );

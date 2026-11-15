@@ -203,3 +203,16 @@ def test_filtros_salvos(client):
     assert client.get("/api/filtros").json()["filtros"][0]["params"]["chance_min"] == 60
     assert client.delete(f"/api/filtros/{fid}").json()["filtros"] == []
     assert client.post("/api/filtros", json={"nome": "", "params": {}}).status_code == 422
+
+
+def test_configuracoes_pela_administracao(client):
+    secoes = {s["arquivo"]: s for s in client.get("/api/admin/config").json()["secoes"]}
+    assert {"site", "apostas", "alertas", "projecao"} <= set(secoes)
+    r = client.put("/api/admin/config", json={"arquivo": "site", "caminho": "nome", "valor": "Teste"})
+    assert r.json()["valor"] == "Teste" and client.get("/api/meta").json()["site"]["nome"] == "Teste"
+    assert client.put("/api/admin/config", json={"arquivo": "site", "caminho": "cor_destaque", "valor": "x"}).status_code == 422
+    assert client.put("/api/admin/config", json={"arquivo": "projecao", "caminho": "mercados", "valor": 1}).status_code == 422
+    campo = next(c for c in client.get("/api/admin/config").json()["secoes"][0]["campos"] if c["caminho"] == "nome")
+    assert campo["mudado"] and campo["valor"] == "Teste"
+    client.delete("/api/admin/config", params={"arquivo": "site", "caminho": "nome"})
+    assert client.get("/api/meta").json()["site"]["nome"] != "Teste"

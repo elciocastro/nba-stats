@@ -16,13 +16,16 @@ from typing import Any
 
 import yaml
 
+from .. import ajustes as _aj
+
 DEFAULT_ALERT_CONFIG = Path("config/alertas.yaml")
 MK = {"pts": "pontos", "reb": "rebotes", "ast": "assistências", "pra": "PRA", "fg3m": "bolas de 3"}
 
 
-def load_alert_config(path: str | Path = DEFAULT_ALERT_CONFIG) -> dict[str, Any]:
+def load_alert_config(path: str | Path = DEFAULT_ALERT_CONFIG, ajustes: bool = True) -> dict[str, Any]:
     p = Path(path)
-    return (yaml.safe_load(p.read_text(encoding="utf-8")) or {}) if p.exists() else {}
+    data = (yaml.safe_load(p.read_text(encoding="utf-8")) or {}) if p.exists() else {}
+    return _aj.aplicar("alertas", data) if ajustes and p == Path(DEFAULT_ALERT_CONFIG) else data
 
 
 def _fav_ids(favs: dict[str, list[dict[str, Any]]]) -> tuple[set[int], set[int]]:

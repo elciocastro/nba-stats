@@ -316,7 +316,7 @@ function DvpTab({ mercado }: { mercado: string }) {
   const cls = (r: R, col: string) => {
     if (!col.endsWith("_rank")) return undefined;
     const v = r[col] as number;
-    return v >= 26 ? { background: "var(--h-good)", color: "#dcfce7", fontWeight: 700 } : v <= 5 ? { background: "var(--h-bad)", color: "#fee2e2", fontWeight: 700 } : undefined;
+    return v >= 26 ? { background: "var(--h-good)", color: "var(--h-good-t)", fontWeight: 700 } : v <= 5 ? { background: "var(--h-bad)", color: "var(--h-bad-t)", fontWeight: 700 } : undefined;
   };
   const rows = (q.data?.linhas ?? []).filter((r) => !soHoje || r.joga_hoje);
   return (

@@ -1,0 +1,6 @@
+# Identidade do site (nome, subtítulo, cor de destaque, tema padrão).
+# Dá para mudar na Administração → Configurações (fica em data/ajustes/site.yaml).
+nome: Garrafão
+subtitulo: Estatística da NBA para quem analisa props
+cor_destaque: "#f97316"
+tema_padrao: escuro

@@ -300,7 +300,8 @@ def main(argv: list[str] | None = None) -> int:
                    ["grupo", "conferidas", "acerto_pct", "chance_media_pct", "lucro_unidades", "roi_pct"])
 
     elif args.cmd == "calibrar":
-        rules, params = load_matchup_rules(args.regras), load_projection_params(args.params)
+        # sem os ajustes da Administração: o resultado é regravado em config/
+        rules, params = load_matchup_rules(args.regras), load_projection_params(args.params, ajustes=False)
         print("Montando o histórico (pode levar alguns minutos)...", flush=True)
         data = build_dataset(conn, args.season, rules, params, start=args.desde, step=args.passo)
         if not data:

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
-import { api, api3, Meta, UsuarioAdm } from "../api";
+import { api, api3, CampoCfg, config, Meta, UsuarioAdm } from "../api";
 
 const quando = (iso: string | null) => (iso ? new Date(iso).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : "—");
 
@@ -12,7 +12,7 @@ export default function Admin({ meta }: { meta: Meta }) {
   const aba = sp.get("aba") ?? "usuarios";
   if (meta.modo !== "usuarios") return <PrimeiroAdmin meta={meta} />;
   if (meta.usuario?.papel !== "admin") return <><h1>Administração</h1><p className="muted">Só para administradores.</p></>;
-  const tabs: Record<string, string> = { usuarios: "Usuários", acessos: "Acessos", sistema: "Sistema" };
+  const tabs: Record<string, string> = { usuarios: "Usuários", acessos: "Acessos", config: "Configurações", sistema: "Sistema" };
   return (
     <>
       <h1>Administração</h1>
@@ -21,6 +21,7 @@ export default function Admin({ meta }: { meta: Meta }) {
       <div style={{ marginTop: 14 }}>
         {aba === "usuarios" && <Usuarios eu={meta.usuario?.id} />}
         {aba === "acessos" && <Acessos />}
+        {aba === "config" && <Configuracoes />}
         {aba === "sistema" && <Sistema />}
       </div>
     </>
@@ -184,5 +185,71 @@ function Sistema() {
             <td>{c.games}</td><td>{c.stats}</td><td className="muted small" style={{ whiteSpace: "normal" }}>{c.error ?? ""}</td></tr>))}
         </tbody></table></div>
     </>
+  );
+}
+
+const mostrar = (v: unknown) => v == null || v === "" ? "vazio" : Array.isArray(v) ? v.join(", ") : typeof v === "boolean" ? (v ? "sim" : "não") : String(v);
+
+function Configuracoes() {
+  const q = useQuery({ queryKey: ["admin-config"], queryFn: config.ler });
+  const [sec, setSec] = useState("site");
+  if (!q.data) return <div className="loading">Carregando…</div>;
+  const s = q.data.secoes.find((x) => x.arquivo === sec) ?? q.data.secoes[0];
+  return (
+    <>
+      <p className="muted small" style={{ marginTop: 0 }}>Os valores padrão ficam em <code>config/</code> (no Git). O que muda aqui vale só para este
+        ambiente (fica em <code>data/ajustes</code>) e entra na hora. “Padrão” volta ao valor do arquivo.</p>
+      <div className="tabs" style={{ marginBottom: 12 }}>{q.data.secoes.map((x) => (
+        <button key={x.arquivo} className={`tab ${x.arquivo === s.arquivo ? "on" : ""}`} onClick={() => setSec(x.arquivo)}>
+          {x.titulo}{x.campos.some((c) => c.mudado) ? " •" : ""}</button>))}</div>
+      <div className="grid2">{s.campos.map((c) => <Campo key={c.caminho} c={c} />)}</div>
+    </>
+  );
+}
+
+function Campo({ c }: { c: CampoCfg }) {
+  const qc = useQueryClient();
+  const [v, setV] = useState<unknown>(c.valor);
+  const [ok, setOk] = useState(false);
+  const done = () => { setOk(true); setTimeout(() => setOk(false), 1500); qc.invalidateQueries({ queryKey: ["admin-config"] });
+    qc.invalidateQueries({ queryKey: ["meta"] }); qc.invalidateQueries({ queryKey: ["saude"] }); };
+  const salvar = useMutation({ mutationFn: (x: unknown) => config.definir(c.arquivo, c.caminho, x), onSuccess: done });
+  const restaurar = useMutation({ mutationFn: () => config.restaurar(c.arquivo, c.caminho), onSuccess: () => { setV(c.padrao); done(); } });
+  const lista = (x: unknown) => Array.isArray(x) ? x.join(", ") : "";
+  let input: React.ReactNode;
+  if (c.tipo === "sim_nao") {
+    input = <label className="toggle"><input type="checkbox" checked={!!v} onChange={(e) => { setV(e.target.checked); salvar.mutate(e.target.checked); }} />{v ? "Sim" : "Não"}</label>;
+  } else if (c.tipo === "opcao") {
+    input = <select className="input" value={String(v)} onChange={(e) => { setV(e.target.value); salvar.mutate(e.target.value); }}>
+      {c.opcoes!.map((o) => <option key={o}>{o}</option>)}</select>;
+  } else if (c.tipo === "lista_opcoes") {
+    const sel = (v as string[]) ?? [];
+    input = <div className="tabs">{c.opcoes!.map((o) => <button key={o} className={`tab ${sel.includes(o) ? "on" : ""}`} onClick={() => {
+      const n = sel.includes(o) ? sel.filter((x) => x !== o) : [...sel, o]; setV(n); salvar.mutate(n); }}>{o}</button>)}</div>;
+  } else if (c.tipo === "cor") {
+    input = <span className="row"><input type="color" value={String(v)} onChange={(e) => setV(e.target.value)} onBlur={() => salvar.mutate(v)} />
+      <button className="btn" onClick={() => salvar.mutate(v)}>Salvar</button></span>;
+  } else {
+    const isLista = c.tipo.startsWith("lista");
+    const [txt, setTxt] = [isLista ? lista(v) : v == null ? "" : String(v), (t: string) => setV(isLista ? t.split(",").map((x) => x.trim()).filter(Boolean) : t)];
+    input = <span className="row" style={{ flexWrap: "nowrap" }}>
+      <input className="input" style={{ flex: 1, minWidth: 0 }} value={txt as string} placeholder={isLista ? "separe por vírgula" : ""}
+        inputMode={c.tipo === "texto" || isLista ? undefined : "decimal"}
+        onChange={(e) => setTxt(e.target.value)} onKeyDown={(e) => e.key === "Enter" && salvar.mutate(v)} />
+      <button className="btn" onClick={() => salvar.mutate(c.tipo === "lista_numeros" ? (v as string[]).map((x) => Number(String(x).replace(",", "."))) : v)}>Salvar</button></span>;
+  }
+  return (
+    <div className="panel">
+      <div className="row" style={{ justifyContent: "space-between" }}>
+        <b>{c.rotulo}</b>
+        {c.mudado && <button className="btn" title={`Voltar para ${mostrar(c.padrao)}`} onClick={() => restaurar.mutate()}>Padrão</button>}
+      </div>
+      {c.ajuda && <div className="muted small" style={{ margin: "4px 0 8px" }}>{c.ajuda}</div>}
+      <div style={{ marginTop: c.ajuda ? 0 : 8 }}>{input}</div>
+      <div className="small" style={{ marginTop: 6 }}>
+        {ok ? <span className="over">Salvo ✓</span> : salvar.error ? <span className="under">{(salvar.error as Error).message}</span>
+          : <span className="muted">{c.mudado ? `Mudado · padrão: ${mostrar(c.padrao)}` : "Usando o padrão"}</span>}
+      </div>
+    </div>
   );
 }

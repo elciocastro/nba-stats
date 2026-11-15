@@ -8,13 +8,17 @@ from typing import Any
 
 import yaml
 
+from .. import ajustes as _aj
+
 from .queries import STATS, player_trends
 
 DEFAULT_RULES = Path("config/potencial.yaml")
 
 
-def load_rules(path: str | Path = DEFAULT_RULES) -> dict[str, Any]:
+def load_rules(path: str | Path = DEFAULT_RULES, ajustes: bool = True) -> dict[str, Any]:
     rules = yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
+    if ajustes and Path(path) == Path(DEFAULT_RULES):
+        rules = _aj.aplicar("potencial", rules)
     unknown = set(rules.get("pesos", {})) - set(STATS)
     if unknown:
         raise ValueError(f"Estatística desconhecida em pesos: {sorted(unknown)}. Válidas: {STATS}")

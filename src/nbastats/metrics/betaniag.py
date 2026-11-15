@@ -20,12 +20,15 @@ from typing import Any
 
 import yaml
 
+from .. import ajustes as _aj
+
 DEFAULT_BETANIAG = Path("config/betaniag.yaml")
 
 
-def load_betaniag(path: str | Path = DEFAULT_BETANIAG) -> dict[str, Any]:
+def load_betaniag(path: str | Path = DEFAULT_BETANIAG, ajustes: bool = True) -> dict[str, Any]:
     p = Path(path)
-    return (yaml.safe_load(p.read_text(encoding="utf-8")) or {}) if p.exists() else {}
+    data = (yaml.safe_load(p.read_text(encoding="utf-8")) or {}) if p.exists() else {}
+    return _aj.aplicar("betaniag", data) if ajustes and p == Path(DEFAULT_BETANIAG) else data
 
 
 def no_vig(odd_over: float | None, odd_under: float | None) -> dict[str, float] | None:

@@ -22,6 +22,8 @@ from typing import Any
 
 import yaml
 
+from .. import ajustes as _aj
+
 from .matchup import _COLS, _derive
 
 DEFAULT_BET_CONFIG = Path("config/apostas.yaml")
@@ -29,9 +31,10 @@ SIDES = ("over", "under")
 STATUSES = ("pendente", "ganha", "perdida", "devolvida", "anulada")
 
 
-def load_bet_config(path: str | Path = DEFAULT_BET_CONFIG) -> dict[str, Any]:
+def load_bet_config(path: str | Path = DEFAULT_BET_CONFIG, ajustes: bool = True) -> dict[str, Any]:
     p = Path(path)
-    return (yaml.safe_load(p.read_text(encoding="utf-8")) or {}) if p.exists() else {}
+    data = (yaml.safe_load(p.read_text(encoding="utf-8")) or {}) if p.exists() else {}
+    return _aj.aplicar("apostas", data) if ajustes and p == Path(DEFAULT_BET_CONFIG) else data
 
 
 def _now() -> str:

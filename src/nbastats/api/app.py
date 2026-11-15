@@ -20,6 +20,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from nbastats import ajustes as aj
 from nbastats import auth, db
 from nbastats.config import get_settings
 from nbastats.ingest import last_refresh
@@ -193,7 +194,9 @@ def _game(g: dict[str, Any]) -> dict[str, Any]:
 
 @app.get("/api/saude")
 def health(conn=Depends(get_conn)):
-    return {"ok": True, "modo": auth.modo(conn, _senha_unica())}
+    site = aj.load_site()  # público: o login mostra o nome e a cor do site
+    return {"ok": True, "modo": auth.modo(conn, _senha_unica()),
+            "site": {k: site.get(k) for k in ("nome", "subtitulo", "cor_destaque", "tema_padrao")}}
 
 
 class Login(BaseModel):
@@ -275,7 +278,7 @@ def meta(request: Request, conn=Depends(get_conn)):
     return {"mercados": MARKETS, "hoje": date.today().isoformat(), "atualizado": last_refresh(conn),
             "betaniag": bool(cfg.get("habilitado")), "esportes": bt.active_sports(cfg),
             "modo": auth.modo(conn, _senha_unica()), "usuario": request.state.usuario, "lavada": _lavada(),
-            "etiquetas": ap.load_bet_config().get("etiquetas") or [],
+            "etiquetas": ap.load_bet_config().get("etiquetas") or [], "site": aj.load_site(),
             "alerta": si.status_carga(conn)["alerta"]}
 
 
@@ -708,6 +711,61 @@ def admin_delete(user_id: int, request: Request, conn=Depends(get_conn)):
     if request.state.usuario and request.state.usuario["id"] == user_id:
         raise HTTPException(422, "Você não pode apagar o próprio usuário.")
     _admin_call(auth.apagar_usuario, conn, user_id)
+    return {"ok": True}
+
+
+class Ajuste(BaseModel):
+    arquivo: str
+    caminho: str
+    valor: Any = None
+
+
+def _bases() -> dict[str, dict[str, Any]]:
+    from nbastats.metrics.matchup import load_matchup_rules as mr
+    return {"site": {**aj.SITE_PADRAO, **_site_base()},
+            "apostas": ap.load_bet_config(ajustes=False), "alertas": _alert_cfg(False),
+            "betaniag": bt.load_betaniag(ajustes=False), "projecao": load_projection_params(ajustes=False),
+            "matchup": mr(ajustes=False), "potencial": load_rules(ajustes=False)}
+
+
+def _site_base() -> dict[str, Any]:
+    import yaml as _y
+    p = Path("config/site.yaml")
+    return (_y.safe_load(p.read_text(encoding="utf-8")) or {}) if p.exists() else {}
+
+
+def _alert_cfg(ajustes: bool = True) -> dict[str, Any]:
+    from nbastats.metrics.alertas import load_alert_config
+    return load_alert_config(ajustes=ajustes)
+
+
+def _limpar_caches() -> None:
+    from nbastats.metrics import painel
+    painel._CACHE.clear()
+
+
+@app.get("/api/admin/config")
+def admin_config():
+    return {"secoes": aj.painel(_bases())}
+
+
+@app.put("/api/admin/config")
+def admin_config_set(body: Ajuste):
+    try:
+        v = aj.definir(body.arquivo, body.caminho, body.valor)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc))
+    _limpar_caches()
+    return {"ok": True, "valor": v}
+
+
+@app.delete("/api/admin/config")
+def admin_config_reset(arquivo: str, caminho: str):
+    try:
+        aj.restaurar(arquivo, caminho)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc))
+    _limpar_caches()
     return {"ok": True}
 
 

@@ -24,6 +24,8 @@ from typing import Any, Iterable
 
 import yaml
 
+from .. import ajustes as _aj
+
 from .matchup import (
     MATCHUP_STATS, _COLS, _derive, _player_rows, _team_games, dvp, player_form, player_groups,
     team_context,
@@ -32,8 +34,11 @@ from .matchup import (
 DEFAULT_PROJECTION_PARAMS = Path("config/projecao.yaml")
 
 
-def load_projection_params(path: str | Path = DEFAULT_PROJECTION_PARAMS) -> dict[str, Any]:
-    return yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
+def load_projection_params(path: str | Path = DEFAULT_PROJECTION_PARAMS, ajustes: bool = True) -> dict[str, Any]:
+    """``ajustes=False``: só o arquivo (para o ``calibrar`` regravar sem levar os
+    ajustes da Administração para o config/)."""
+    data = yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
+    return _aj.aplicar("projecao", data) if ajustes and Path(path) == Path(DEFAULT_PROJECTION_PARAMS) else data
 
 
 # ---------- peças ----------
@@ -284,7 +289,7 @@ def _dispersion(pts: list[tuple[float, float, float]]) -> dict[str, Any]:
     referência (L10 arredondado para x,5) e fica com a de menor erro de
     probabilidade (Brier).
     """
-    from .linhas import prob_over, reference_line
+    from .linhas import prob_over, reference_line, shrink
 
     mus = [m for m, _, _ in pts]
     excess = mean((y - m) ** 2 for m, y, _ in pts) - mean(mus)
@@ -306,7 +311,15 @@ def _dispersion(pts: list[tuple[float, float, float]]) -> dict[str, Any]:
             errs.append((prob_over(m, line, cfg) - (1.0 if y > line else 0.0)) ** 2)
         brier[name] = mean(errs)
     best = min(brier, key=brier.get)
-    return {**cand[best], "brier": round(brier[best], 4)}
+    out = {**cand[best], "brier": round(brier[best], 4)}
+    # encolhimento: corrige excesso de confiança nas pontas (Brier mínimo em b)
+    raw = [(prob_over(m, reference_line(l10), cand[best]), 1.0 if y > reference_line(l10) else 0.0) for m, y, l10 in pts]
+    def brier_b(b: float) -> float:
+        return mean((shrink(p, b) - y) ** 2 for p, y in raw)
+    b = min((x / 100 for x in range(50, 131)), key=brier_b)
+    if b != 1.0:
+        out |= {"encolhimento": b, "brier": round(brier_b(b), 4)}
+    return out
 
 
 def calibrate(data: list[dict[str, Any]], params: dict[str, Any]) -> dict[str, Any]:

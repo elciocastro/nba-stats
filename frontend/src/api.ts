@@ -74,7 +74,7 @@ export type Inicio = {
 export type Usuario = { id: number; login: string; nome: string; papel: "admin" | "usuario"; trocar_senha: boolean; expira_em: string | null };
 export type Modo = "usuarios" | "senha" | "aberto";
 export type Meta = { mercados: Record<string, string>; hoje: string; atualizado: string | null; betaniag: boolean;
-  modo: Modo; usuario: Usuario | null; alerta: string | null; lavada: number; etiquetas: string[] };
+  modo: Modo; usuario: Usuario | null; alerta: string | null; lavada: number; etiquetas: string[]; site: import("./marca").Site };
 
 export class SenhaError extends Error {
   constructor(public modo: Modo = "senha") { super("login"); }
@@ -129,7 +129,7 @@ export const api = {
   favoritar: (tipo: string, id: number, nome?: string) =>
     call<Favoritos>("/api/favoritos", { method: "POST", body: JSON.stringify({ tipo, id, nome }) }),
   desfavoritar: (tipo: string, id: number) => call<Favoritos>(`/api/favoritos/${tipo}/${id}`, { method: "DELETE" }),
-  saude: () => call<{ ok: boolean; modo: Modo }>("/api/saude"),
+  saude: () => call<{ ok: boolean; modo: Modo; site: import("./marca").Site }>("/api/saude"),
   login: async (login: string, senha: string) => {
     const r = await fetch("/api/login", { method: "POST", headers: { "Content-Type": "application/json" },
                                           body: JSON.stringify({ login, senha }) });
@@ -269,4 +269,15 @@ export const filtros = {
   listar: () => call<{ filtros: Filtro[] }>("/api/filtros"),
   salvar: (nome: string, params: FiltroParams) => call<{ filtros: Filtro[] }>("/api/filtros", { method: "POST", body: JSON.stringify({ nome, params }) }),
   apagar: (id: number) => call<{ filtros: Filtro[] }>(`/api/filtros/${id}`, { method: "DELETE" }),
+};
+
+// ---------- configurações (Administração) ----------
+export type CampoCfg = { arquivo: string; caminho: string; tipo: string; rotulo: string; ajuda: string; min?: number; max?: number;
+  opcoes?: string[]; padrao: unknown; valor: unknown; mudado: boolean };
+export const config = {
+  ler: () => call<{ secoes: { arquivo: string; titulo: string; campos: CampoCfg[] }[] }>("/api/admin/config"),
+  definir: (arquivo: string, caminho: string, valor: unknown) =>
+    call<{ ok: boolean; valor: unknown }>("/api/admin/config", { method: "PUT", body: JSON.stringify({ arquivo, caminho, valor }) }),
+  restaurar: (arquivo: string, caminho: string) =>
+    call<{ ok: boolean }>(`/api/admin/config?arquivo=${arquivo}&caminho=${encodeURIComponent(caminho)}`, { method: "DELETE" }),
 };

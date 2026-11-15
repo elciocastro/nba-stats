@@ -20,6 +20,8 @@ from typing import Any
 
 import yaml
 
+from .. import ajustes as _aj
+
 DEFAULT_MATCHUP_RULES = Path("config/matchup.yaml")
 
 # Mercados que dá para cruzar com o DvP. Os combinados (pra, pr...) e os de
@@ -39,8 +41,10 @@ CRITERIOS = (
 )
 
 
-def load_matchup_rules(path: str | Path = DEFAULT_MATCHUP_RULES) -> dict[str, Any]:
+def load_matchup_rules(path: str | Path = DEFAULT_MATCHUP_RULES, ajustes: bool = True) -> dict[str, Any]:
     rules = yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
+    if ajustes and Path(path) == Path(DEFAULT_MATCHUP_RULES):
+        rules = _aj.aplicar("matchup", rules)
     unknown = set(rules.get("estatisticas", [])) - set(MATCHUP_STATS)
     if unknown:
         raise ValueError(f"Estatística desconhecida: {sorted(unknown)}. Válidas: {MATCHUP_STATS}")
