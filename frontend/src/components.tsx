@@ -140,3 +140,28 @@ export function baixarCsv(nome: string, linhas: Record<string, unknown>[], colun
   a.click();
   URL.revokeObjectURL(a.href);
 }
+
+
+/** Celular (mesmo corte do CSS: 760px). */
+export function useCelular(q = "(max-width: 760px)") {
+  const [m, setM] = useState(() => { try { return window.matchMedia(q).matches; } catch { return false; } });
+  useEffect(() => {
+    const mq = window.matchMedia(q);
+    const f = () => setM(mq.matches);
+    mq.addEventListener("change", f);
+    return () => mq.removeEventListener("change", f);
+  }, [q]);
+  return m;
+}
+
+/** Painel que no celular vem fechado e abre ao tocar no título. */
+export function Recolhe({ titulo, extra, className = "", children }: { titulo: React.ReactNode; extra?: React.ReactNode;
+  className?: string; children: React.ReactNode }) {
+  const cel = useCelular();
+  return (
+    <details className={`panel recolhe ${className}`} open={!cel || undefined}>
+      <summary><b>{titulo}</b>{extra && <span className="muted small"> {extra}</span>}</summary>
+      <div className="corpo">{children}</div>
+    </details>
+  );
+}

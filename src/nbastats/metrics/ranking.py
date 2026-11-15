@@ -132,3 +132,68 @@ def _box_row(r: sqlite3.Row) -> dict[str, Any]:
     d |= {"player_id": r["player_id"], "jogador": r["jogador"] or str(r["player_id"]), "posicao": r["posicao"],
           "min": round(r["minutes"] or 0, 1), "pra": (r["pts"] or 0) + (r["reb"] or 0) + (r["ast"] or 0)}
     return d
+
+
+# ---------- jogos ao vivo e por time ----------
+
+def overlay_live(jogos: list[dict[str, Any]], live: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Placar e situação do placar ao vivo da NBA por cima dos jogos do banco
+    (o box score do banco só chega depois do jogo, pela atualização)."""
+    by_id = {g["game_id"]: g for g in live}
+    out = []
+    for j in jogos:
+        g = by_id.get(j["id"])
+        if g is None:
+            out.append({**j, "ao_vivo": False})
+            continue
+        out.append({**j, "status": g["status_texto"] or j["status"], "ao_vivo": g["status"] == 2,
+                    "placar_casa": g["placar_casa"] if g["status"] >= 2 else j["placar_casa"],
+                    "placar_fora": g["placar_fora"] if g["status"] >= 2 else j["placar_fora"],
+                    "tem_box": j["tem_box"] or (g["status"] >= 2 and bool(g["jogadores"]))})
+    return out
+
+
+def live_boxscore(g: dict[str, Any], names: dict[str, str] | None = None) -> dict[str, Any]:
+    """Box score no formato de ``boxscore_game`` a partir do placar ao vivo."""
+    names = names or {}
+    teams = []
+    for side, tid, abbr, score in (("fora", g["fora_id"], g["fora"], g["placar_fora"]),
+                                   ("casa", g["casa_id"], g["casa"], g["placar_casa"])):
+        ps = []
+        for p in (x for x in g["jogadores"] if x["team_id"] == tid):
+            ps.append({"player_id": p["player_id"], "jogador": p.get("nome") or str(p["player_id"]), "posicao": None,
+                       "min": p["minutos"], "pts": p["pts"], "reb": p["reb"], "ast": p["ast"], "stl": p["stl"],
+                       "blk": p["blk"], "turnover": p["turnover"], "pf": p.get("faltas"), "fgm": p.get("fgm"),
+                       "fga": p.get("fga"), "fg3m": p["fg3m"], "fg3a": p["fg3a"], "ftm": p["ftm"], "fta": p["fta"],
+                       "oreb": None, "dreb": None, "plus_minus": None, "pra": p["pts"] + p["reb"] + p["ast"],
+                       "em_quadra": p.get("em_quadra", False)})
+        ps.sort(key=lambda p: p["min"], reverse=True)
+        played = [p for p in ps if p["min"] > 0]
+        tot = {k: sum(p[k] or 0 for p in played) for k in ("pts", "reb", "ast", "stl", "blk", "turnover", "pf",
+                                                           "fgm", "fga", "fg3m", "fg3a", "ftm", "fta")}
+        tot |= {"oreb": None, "fg_pct": _pct(tot["fgm"], tot["fga"]), "fg3_pct": _pct(tot["fg3m"], tot["fg3a"]),
+                "ft_pct": _pct(tot["ftm"], tot["fta"])}
+        teams.append({"lado": side, "time_id": tid, "time": abbr, "nome": names.get(abbr, abbr), "placar": score,
+                      "jogadores": played, "nao_jogaram": [p["jogador"] for p in ps if p["min"] <= 0], "totais": tot})
+    return {"id": g["game_id"], "data": g["data"], "status": g["status_texto"], "temporada": None, "playoffs": False,
+            "times": teams, "ao_vivo": g["status"] == 2, "periodo": g.get("periodo")}
+
+
+def team_games(conn: sqlite3.Connection, team_id: int, season: int) -> list[dict[str, Any]]:
+    """Jogos do time na temporada (mais recente primeiro), com placar e resultado."""
+    rows = conn.execute("""
+        SELECT g.id, g.date, g.status, g.postseason, g.home_team_id, g.home_team_score, g.visitor_team_score,
+               h.abbreviation AS casa, v.abbreviation AS fora,
+               EXISTS (SELECT 1 FROM player_game_stats s WHERE s.game_id = g.id) AS tem_box
+        FROM games g JOIN teams h ON h.id = g.home_team_id JOIN teams v ON v.id = g.visitor_team_id
+        WHERE g.season = ? AND (g.home_team_id = ? OR g.visitor_team_id = ?)
+        ORDER BY g.date DESC, g.id DESC""", (season, team_id, team_id)).fetchall()
+    out = []
+    for r in rows:
+        casa = r["home_team_id"] == team_id
+        pro, contra = (r["home_team_score"], r["visitor_team_score"]) if casa else (r["visitor_team_score"], r["home_team_score"])
+        out.append({"id": r["id"], "data": r["date"], "em_casa": casa, "adversario": r["fora"] if casa else r["casa"],
+                    "pro": pro, "contra": contra, "status": r["status"], "playoffs": bool(r["postseason"]),
+                    "resultado": None if pro is None or contra is None else ("V" if pro > contra else "D"),
+                    "tem_box": bool(r["tem_box"])})
+    return out

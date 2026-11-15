@@ -8,12 +8,22 @@ from nbastats import db
 from nbastats.api import app as api
 
 
+class AoVivoFalso:
+    def __init__(self, jogos):
+        self.jogos = jogos
+
+    def live_games(self):
+        return self.jogos
+
+
 @pytest.fixture
 def client(base, monkeypatch):  # noqa: F811 (fixture importada de test_fase5)
     shared = db.connect(":memory:", threads=True)
     base.commit()
     base.backup(shared)
     api.app.dependency_overrides[api.get_conn] = lambda: shared
+    api._LIVE.update(t=0.0, dados=None)
+    api.app.dependency_overrides[api.get_live] = lambda: AoVivoFalso([])
     monkeypatch.setenv("NBASTATS_PASSWORD", "")
     monkeypatch.setenv("NBASTATS_AQUECER", "0")
     from nbastats.metrics import painel
@@ -262,3 +272,33 @@ def test_perfil_usa_a_transacao_mais_recente(base):  # noqa: F811
                  " VALUES ('t2', '2026-12-10', 'Waive', 3, 10, 'x')")
     p = hs.player_profile(base, 10, "2026-12-25", "pts")
     assert p["sem_time"] is True and p["time"] is None and p["proximo_jogo"] is None
+
+
+def _ao_vivo(game_id, casa_id, fora_id, day="2026-11-07"):
+    return {"game_id": game_id, "data": day, "status": 2, "status_texto": "Q3 5:12", "periodo": 3, "relogio_seg": 312,
+            "casa": "AAA", "fora": "BBB", "casa_id": casa_id, "fora_id": fora_id, "placar_casa": 70, "placar_fora": 66,
+            "jogadores": [{"player_id": 10, "team_id": casa_id, "nome": "Ana", "minutos": 24.0, "pts": 18, "reb": 4,
+                           "ast": 3, "fg3m": 2, "fg3a": 5, "ftm": 2, "fta": 2, "fgm": 7, "fga": 12, "stl": 1, "blk": 0,
+                           "turnover": 1, "faltas": 2, "em_quadra": True},
+                          {"player_id": 20, "team_id": fora_id, "nome": "Caio", "minutos": 0.0, "pts": 0, "reb": 0,
+                           "ast": 0, "fg3m": 0, "fg3a": 0, "ftm": 0, "fta": 0, "fgm": 0, "fga": 0, "stl": 0, "blk": 0,
+                           "turnover": 0, "faltas": 0}]}
+
+
+def test_jogos_ao_vivo_e_por_time(client, base):  # noqa: F811
+    from nbastats.metrics import ranking as rk
+    g = base.execute("SELECT id, home_team_id, visitor_team_id FROM games WHERE date = '2026-11-07'").fetchone()
+    if g is None:  # a base pequena: usa o jogo mais recente
+        g = base.execute("SELECT id, home_team_id, visitor_team_id, date FROM games ORDER BY date DESC").fetchone()
+    vivo = _ao_vivo(g["id"], g["home_team_id"], g["visitor_team_id"])
+    jogos = rk.overlay_live([{"id": g["id"], "status": "8:00 pm", "placar_casa": None, "placar_fora": None,
+                              "tem_box": False}], [vivo])
+    assert jogos[0]["ao_vivo"] and jogos[0]["placar_casa"] == 70 and jogos[0]["tem_box"]
+    box = rk.live_boxscore(vivo)
+    assert box["ao_vivo"] and box["times"][1]["jogadores"][0]["pra"] == 25 and box["times"][0]["nao_jogaram"] == ["Caio"]
+
+    tid = g["home_team_id"]
+    t = client.get(f"/api/jogos/time/{tid}", params={"data": "2026-11-07"}).json()
+    assert t["jogos"] and {"adversario", "pro", "contra", "resultado"} <= set(t["jogos"][0])
+    assert t["v"] + t["d"] == sum(1 for j in t["jogos"] if j["resultado"] and not j["playoffs"])
+    assert client.get("/api/jogos/time/999999").status_code == 404
